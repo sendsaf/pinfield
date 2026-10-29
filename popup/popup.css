@@ -1,0 +1,49 @@
+/* Toolbar popup, in the same Liquid Glass look as the dock: frosted cards with a bright rim. */
+:root{
+  --bg:#f4f2ef;--fg:#111;--muted:#6b6b6b;--card:rgba(255,255,255,.72);--rim:rgba(255,255,255,.95);
+  --edge:rgba(0,0,0,.07);--hover:rgba(0,0,0,.045);--press:rgba(0,0,0,.08);--line:rgba(0,0,0,.07);--red:#e60023;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#161616;--fg:#f2f2f2;--muted:#a0a0a0;--card:rgba(44,44,44,.72);--rim:rgba(255,255,255,.14);
+    --edge:rgba(255,255,255,.06);--hover:rgba(255,255,255,.06);--press:rgba(255,255,255,.1);--line:rgba(255,255,255,.07)}
+}
+*{box-sizing:border-box;margin:0}
+body{width:300px;padding:14px;background:var(--bg);color:var(--fg);
+  font:14px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background-image:radial-gradient(120% 70% at 50% -10%,rgba(230,0,35,.09),transparent 70%)}
+a{color:inherit;text-decoration:none;cursor:pointer}
+
+.head{display:flex;align-items:center;gap:12px;padding:4px 4px 14px}
+.app{display:block;filter:drop-shadow(0 4px 10px rgba(120,0,20,.16))}
+h1{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.ver{color:var(--muted);font-size:12px;margin-top:2px}
+
+.card{display:block;background:var(--card);border-radius:20px;
+  box-shadow:inset 0 1px 0 var(--rim),0 0 0 1px var(--edge),0 6px 18px rgba(0,0,0,.06);
+  -webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6)}
+.card + .card{margin-top:10px}
+
+.maker{display:flex;align-items:center;gap:12px;padding:12px 14px 12px 12px;transition:scale .15s,background .15s}
+.maker img{border-radius:10px;flex:none}
+.maker .txt{flex:1;display:flex;flex-direction:column}
+.small{font-size:11px;color:var(--muted)}
+.name{font-weight:600;font-size:15px;margin-top:1px}
+.go{width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:translate .15s}
+.maker:hover{background:var(--hover)}
+.maker:hover .go{translate:2px -2px;stroke:var(--fg)}
+.maker:active{scale:.98}
+
+.list{padding:4px}
+.list a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;transition:background .15s,scale .15s}
+.list a + a{position:relative}
+.list a + a::before{content:"";position:absolute;left:44px;right:12px;top:0;height:1px;background:var(--line)}
+.list a:hover{background:var(--hover)}
+.list a:hover::before,.list a:hover + a::before{opacity:0}
+.list a:active{background:var(--press);scale:.985}
+.list svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--fg);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.list svg.fill{fill:var(--fg);stroke:none}
+.list a[hidden]{display:none}
+
+a:focus-visible{outline:2px solid rgba(0,116,232,.6);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
