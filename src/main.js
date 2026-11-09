@@ -213,6 +213,10 @@
     hide: svg("M2.8 4.2 4.2 2.8l17 17-1.4 1.4-3.2-3.2A11 11 0 0 1 12 19C6.5 19 2.6 15 1 12c.8-1.5 2-3.2 3.7-4.6zM12 5c5.5 0 9.4 4 11 7a13 13 0 0 1-3.1 3.8L16.9 13A5 5 0 0 0 11 7.1L9 5.2A12 12 0 0 1 12 5m-3.7 6.1a4 4 0 0 0 4.6 4.6z"),
     close: svg("m15.18 12 7.16-7.16-3.18-3.18L12 8.82 4.84 1.66 1.66 4.84 8.82 12l-7.16 7.16 3.18 3.18L12 15.18l7.16 7.16 3.18-3.18z"),
     chev: svg("M12 15.5 5.5 9l1.4-1.4 5.1 5.1 5.1-5.1L18.5 9z"),
+    chevR: svg("M15.5 12 9 18.5l-1.4-1.4 5.1-5.1-5.1-5.1L9 5.5z"),
+    chevL: svg("M8.5 12 15 5.5l1.4 1.4-5.1 5.1 5.1 5.1-1.4 1.4z"),
+    // select: a tick inside a dashed circle (strokes, so it can't use the filled-path helper)
+    select: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-dasharray:3.1 2.5"/><path d="M7.9 12.4l2.8 2.8 5.5-5.6" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/></svg>`,
     pin: svg("M17 3H7v2h1v5.4L5 13v2h6v6l1 1 1-1v-6h6v-2l-3-2.6V5h1z"),
     check: svg("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"),
     expand: svg("M4 4h6v2H7.4l3.3 3.3-1.4 1.4L6 7.4V10H4zm10 0h6v6h-2V7.4l-3.3 3.3-1.4-1.4L16.6 6H14zM4 14h2v2.6l3.3-3.3 1.4 1.4L7.4 18H10v2H4zm14 2.6V14h2v6h-6v-2h2.6l-3.3-3.3 1.4-1.4z"),
@@ -276,32 +280,22 @@
   .qa-top{justify-content:flex-end}
   .qa-bot{justify-content:flex-end}
   .qa-bot .grow{flex:1}
-  .q{height:36px;min-width:36px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:999px;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:blur(12px) saturate(1.8);color:#111;cursor:pointer;font-weight:600;font-size:14px;padding:0 10px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .5px rgba(255,255,255,.4),0 2px 10px rgba(0,0,0,.12);transition:scale .2s cubic-bezier(.2,.8,.2,1),background .15s}
-  .q:hover{background:rgba(255,255,255,.85)}
+  .q{height:36px;min-width:36px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:999px;background:#fff;color:#111;cursor:pointer;font-weight:600;font-size:14px;padding:0 10px;
+    box-shadow:0 2px 10px rgba(0,0,0,.16);transition:scale .2s cubic-bezier(.2,.8,.2,1),background .15s}
+  .q:hover{background:#ececec}
   .q:active{scale:1.1}
-  .stage[data-ql="2"] .q{-webkit-backdrop-filter:none;backdrop-filter:none}
-  .stage[data-ql="2"] .q:not(.save):not(.board){background:rgba(255,255,255,.92)}
   .q svg{width:16px;height:16px}
   .q.ic{width:36px;padding:0}
   .q.save{background:#e60023;color:#fff;padding:0 14px;font-size:15px}
   .q.save:hover{background:#ad081b}
   .q.save[data-done]{background:#111}
-  .q.board{max-width:130px;background:rgba(0,0,0,.32);color:#fff;font-weight:600;margin-right:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 10px rgba(0,0,0,.12)}
-  .q.board:hover{background:rgba(0,0,0,.48)}
+  .q.board{max-width:130px;background:#111;color:#fff;font-weight:600;margin-right:auto;box-shadow:0 2px 10px rgba(0,0,0,.16)}
+  .q.board:hover{background:#333}
   .q.board span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
   .q[hidden]{display:none}
   .stage[data-lite] .qa{display:none}
-  /* Liquid Glass (iOS 26/27): floating capsules of frosted glass with a bright rim, a darker lens behind
-     the selected tab, and a dock that shrinks while you move. */
-  .glass{position:relative;background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 -1px 0 var(--rim-lo),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 8px 28px var(--shade)}
-  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-    background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 42%,rgba(255,255,255,0) 72%,rgba(255,255,255,.1));mix-blend-mode:soft-light}
-  .root[data-ql="2"] .glass,.root[data-ql="2"] .pop,.root[data-ql="2"] .sugg{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-2)}
-  /* a long pan: the glass turns to frosted solid, so the GPU doesn't re-blur the moving field under it every frame */
-  .glass{transition:background .2s}
-  .root[data-moving] .glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-2);transition:background .2s .25s,backdrop-filter 0s .25s,scale .35s cubic-bezier(.2,.8,.2,1) .25s}
+  /* bars, pills and popovers: solid surfaces with a fine edge and a soft shadow */
+  .glass{position:relative;background:var(--chrome);color:var(--fg);box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 6px 22px var(--shade)}
   .dock{position:absolute;bottom:18px;left:50%;translate:-50% 0;z-index:9;display:flex;align-items:center;transform-origin:50% 100%;
     transition:scale .35s cubic-bezier(.2,.8,.2,1),translate .35s cubic-bezier(.2,.8,.2,1)}
   .root[data-moving] .dock{scale:.86;translate:-50% 8px;transition-delay:.25s}
@@ -325,8 +319,8 @@
   .ib[hidden]{display:none}
   .ib:focus-visible,.sw:focus-visible,.btn:focus-visible,.mi:focus-visible,.seg button:focus-visible,.bd:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   /* popovers */
-  .pop{position:absolute;z-index:11;border-radius:24px;background:var(--glass-2);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);color:var(--fg);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 14px 40px var(--shade);padding:10px;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
+  .pop{position:absolute;z-index:11;border-radius:24px;background:var(--chrome);color:var(--fg);
+    box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 14px 40px var(--shade);padding:10px;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
   @keyframes pop{from{opacity:0;scale:.9;translate:0 10px}}
   .pop[hidden]{display:none}
   .pop h3{margin:6px 8px 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
@@ -413,30 +407,42 @@
   .exf{display:flex;justify-content:center}
   .story:focus-visible i,.topic:focus-visible i,.fb:focus-visible .col,.fp:focus-visible{outline:3px solid #0074e8;outline-offset:2px}
   /* pin view */
-  /* an open pin: a big card in the grid with its button rail beside it; the cards around it stay faded until
-     you move the field */
   /* enlarge: the pin full size over everything; click anywhere or Esc to close */
   .box{position:absolute;inset:0;z-index:13;display:flex;align-items:center;justify-content:center;padding:28px;background:rgba(12,12,12,.9);cursor:zoom-out;animation:fadeIn .2s ease both}
   .box[hidden]{display:none}
   @keyframes fadeIn{from{opacity:0}}
   .box img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px}
-  .box .ib{position:absolute;top:18px;right:18px;color:#fff;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
-  .box .ib:hover{background:rgba(255,255,255,.26)}
+  .box .ib{position:absolute;top:18px;right:18px;color:#fff;background:#2e2e2e;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .box .ib:hover{background:#3d3d3d}
   .hero{position:absolute;left:0;top:0;z-index:4}
-  .hero .card{position:relative;width:100%;height:100%;border-radius:28px;overflow:hidden;background:var(--ph);box-shadow:0 10px 32px var(--shade),0 0 0 .5px var(--edge)}
-  /* enlarge sits in the corner, only while you're over the pin */
-  .hero .zoom{position:absolute;top:14px;right:14px;opacity:0;scale:.9;transition:opacity .18s ease,scale .18s ease}
-  .hero .card:hover .zoom,.hero .zoom:focus-visible{opacity:1;scale:1}
-  .hero .media{position:relative;width:100%;height:100%;display:block;overflow:hidden}
+  /* the open pin is a Polaroid: one solid card, the picture inset in it and a strip on the right that holds the
+     buttons (Save on top, the rest in the middle, the details toggle at the bottom). Details widen the strip by
+     one grid column for the title and source. */
+  .hero .card{position:relative;display:flex;width:100%;height:100%;padding:8px 0 8px 8px;border-radius:28px;background:var(--chrome);color:var(--fg);box-shadow:0 10px 32px var(--shade),0 0 0 .5px var(--edge),0 0 0 1px var(--line)}
+  .hero .media{position:relative;flex:none;height:100%;display:block;overflow:hidden;border-radius:20px;background:var(--ph)}
   .hero .media img,.hero .media video{position:relative;display:block;width:100%;height:100%;object-fit:contain}
   .hero .media img.bg{position:absolute;inset:0;object-fit:cover;filter:blur(36px) saturate(1.15);scale:1.2;opacity:.85}
-  .acts{position:absolute;display:flex;flex-direction:column;gap:10px;align-items:center}
-  /* where a save went: slides out beside the pin button, then goes */
-  .acts .tag{position:absolute;left:calc(100% + 8px);height:36px;display:flex;align-items:center;padding:0 14px;border-radius:18px;white-space:nowrap;font-weight:600;font-size:14px;color:var(--fg);
+  /* enlarge sits in the picture's corner, only while you're over the pin */
+  .hero .zoom{position:absolute;top:12px;right:12px;opacity:0;scale:.9;transition:opacity .18s ease,scale .18s ease}
+  .hero .card:hover .zoom,.hero .zoom:focus-visible{opacity:1;scale:1}
+  .acts{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:0 8px}
+  .acts .st{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .acts .ib svg{width:20px;height:20px}
+  .acts .info{display:none}
+  .card.wide .acts{align-items:stretch;padding:4px 16px 0 18px}
+  .card.wide .acts .st{flex-direction:row;flex-wrap:wrap;align-items:center}
+  .card.wide .acts .mid{flex:1;flex-direction:column;align-items:stretch;justify-content:center;gap:14px}
+  .card.wide .acts .info{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .card.wide .acts .row{display:flex;flex-wrap:wrap;gap:2px;margin-left:-6px}
+  .info h2{margin:0;font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .info .src{align-self:flex-start;max-width:100%;border:0;padding:0;background:none;color:var(--fg);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .info .src:hover{color:var(--muted)}
+  .info .src:focus-visible{outline:3px solid #0074e8;outline-offset:2px}
+  .info small{color:var(--muted);font-size:13px}
+  /* where a save went: slides out to the right of the card, then goes */
+  .acts .tag{position:absolute;left:calc(100% + 10px);height:36px;display:flex;align-items:center;padding:0 14px;border-radius:18px;white-space:nowrap;font-weight:600;font-size:14px;color:var(--fg);
     opacity:0;translate:-6px 0;pointer-events:none;transition:opacity .2s ease,translate .3s cubic-bezier(.2,.8,.2,1)}
   .acts .tag.on{opacity:1;translate:0 0}
-  .acts .grp{flex-direction:column;gap:4px;padding:5px}
-  .acts .ib svg{width:20px;height:20px}
   .ib.save{background:#e60023;color:#fff}
   .ib.save:hover{background:#c8001f}
   .ib.save:active{background:#ad081b}
@@ -444,8 +450,8 @@
   .ib.save[data-done]:hover{background:var(--muted)}
   .stage[data-focus] .t{opacity:.16}
   .stage[data-focus] .qa{display:none}
-  .toast{position:absolute;left:50%;bottom:96px;translate:-50% 0;z-index:12;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:rgba(20,20,20,.72);-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);color:#fff;font-weight:600;font-size:14px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 8px 28px rgba(0,0,0,.25);animation:toast .3s cubic-bezier(.2,.8,.2,1) both}
+  .toast{position:absolute;left:50%;bottom:96px;translate:-50% 0;z-index:12;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:#1c1c1c;color:#fff;font-weight:600;font-size:14px;
+    box-shadow:0 8px 28px rgba(0,0,0,.25);animation:toast .3s cubic-bezier(.2,.8,.2,1) both}
   .toast[hidden]{display:none}
   .toast i{width:28px;height:28px;border-radius:8px;background:#333 center/cover}
   @keyframes toast{from{opacity:0;translate:-50% 8px}}
@@ -460,8 +466,8 @@
   .btn{height:44px;padding:0 18px;border:0;border-radius:999px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer}
   .btn:hover{background:var(--btn-h)}
   /* search suggestions: opens upward from the dock's search box, like a normal search */
-  .sugg{position:absolute;z-index:11;width:min(520px,80vw);max-height:min(460px,60vh);overflow:auto;border-radius:26px;background:var(--glass-2);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);color:var(--fg);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 14px 40px var(--shade);padding:10px;scrollbar-width:none;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
+  .sugg{position:absolute;z-index:11;width:min(520px,80vw);max-height:min(460px,60vh);overflow:auto;border-radius:26px;background:var(--chrome);color:var(--fg);
+    box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 14px 40px var(--shade);padding:10px;scrollbar-width:none;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
   .sugg[hidden]{display:none}
   .sugg h3{margin:8px 10px 6px;font-size:12px;font-weight:600;color:var(--muted)}
   .sg{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;border:0;border-radius:12px;background:transparent;color:var(--fg);font:inherit;font-size:15px;padding:6px 10px;cursor:pointer;text-align:left}
@@ -486,6 +492,8 @@
   .sb{height:48px;display:inline-flex;align-items:center;gap:6px;padding:0 18px;border:0;border-radius:24px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;
     transition:scale .25s cubic-bezier(.2,.8,.2,1),background .2s}
   .sb svg{width:18px;height:18px}
+  .sb.ic{width:48px;padding:0;justify-content:center}
+  .sb.ic svg{width:24px;height:24px}
   .sb:hover{background:var(--press)}
   .sb:active{scale:1.08;background:var(--lens)}
   .sb:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
@@ -1034,10 +1042,10 @@
       inner.innerHTML = `<span class="lbl">${selNote.icon || ""}${esc(say)}</span>`;
     } else if (!selecting) {
       say = "";
-      inner.innerHTML = `<button class="sb" data-a="sel-on" title="Select pins to download">${I.check}Select</button>`;
+      inner.innerHTML = `<button class="sb ic" data-a="sel-on" title="Select pins to download" aria-label="Select pins">${I.select}</button>`;
     } else {
       say = n ? n + " selected" : "Click pins to select them";
-      inner.innerHTML = `<span class="lbl">${n ? n + " selected" : "Click pins"}</span>` +
+      inner.innerHTML = `<span class="lbl">${n ? n + " selected" : "Click pins to select"}</span>` +
         (n ? `<button class="sb dl" data-a="sel-dl" title="Save the selected pins into one folder">${I.download}Download</button>` : "") +
         `<span class="sep" aria-hidden="true"></span><button class="sb" data-a="sel-off" title="Cancel (Esc)">Cancel</button>`;
     }
@@ -1158,7 +1166,7 @@
     let tag = acts.querySelector(".tag");
     if (!tag) { tag = el("span", "tag glass"); tag.setAttribute("role", "status"); acts.append(tag); }
     tag.textContent = msg;
-    tag.style.top = btn.closest(".grp").offsetTop + btn.offsetTop + 6 + "px";
+    tag.style.top = btn.offsetTop + 6 + "px";
     tag.classList.remove("on");
     void tag.offsetWidth;
     tag.classList.add("on");
@@ -1366,49 +1374,61 @@
   }
 
   // ---------- pin view ----------
-  // An open pin is part of the grid: a big card at the centre, lined up with the bottom bar, its buttons in a
-  // rail beside it, and Pinterest's related pins packed around both like any other cards. The cards around it
-  // stay faded until you move the field. Signed in, this is the pin's own page (related pins from Pinterest);
-  // signed out, Pinterest can't open pin pages, so the feed you're on is laid out around it instead.
-  const RAIL_GAP = 14, RAIL_W = 58;
+  // An open pin is part of the grid: a big card at the centre, lined up with the bottom bar, and Pinterest's
+  // related pins packed around it like any other cards. The card is a Polaroid: the picture with a strip on its
+  // right holding the buttons, the two together exactly three grid columns wide, so no gap opens beside it.
+  // "Details" widens the strip by one column for the title and source. The cards around it stay faded until you
+  // move the field. Signed in, this is the pin's own page (related pins from Pinterest); signed out, Pinterest
+  // can't open pin pages, so the feed you're on is laid out around it instead.
+  const PAD = 8, STRIP = 64, PANEL = 252; // the frame, the button strip, and what details add (one column pitch)
+  const LS_PANEL = "pinfield:details";
+  let panelOpen = lsGet(LS_PANEL, "0") === "1";
   let openHere = null; // signed out: the world to go back to on close
 
+  // three sections of the strip: Save on its own at the top, the rest in the middle, the details toggle at the bottom
   function railButtons(p) {
     const num = /^\d+$/.test(p.id), signed = canSave() && num;
-    const groups = [
-      [["close", I.close, "Close (Esc)"]],
-      signed ? [["save", I.pin, saved.has(p.id) ? "Saved to " + savedMap.get(p.id).board + ". Press to remove" : "Save"], ["board", I.boards, "Save to a board"]] : [],
-      [
+    return {
+      top: signed ? [["save", I.pin, saved.has(p.id) ? "Saved to " + savedMap.get(p.id).board + ". Press to remove" : "Save"]] : [],
+      mid: [
+        ["close", I.close, "Close (Esc)"],
+        signed && ["board", I.boards, "Save to a board"],
         num && ["share", I.share, "Copy link"],
         ["download", I.download, "Download image"],
         p.link && ["visit", I.visit, "Visit site"],
         num && ["native", I.native, "Open on Pinterest (comments and more)"],
       ].filter(Boolean),
-    ].filter((g) => g.length);
-    return groups;
+      bot: [["panel", panelOpen ? I.chevL : I.chevR, panelOpen ? "Hide details" : "Show details"]],
+    };
   }
-  const railHeight = (groups) => groups.reduce((h, g) => h + 10 + g.length * 48 + (g.length - 1) * 4, 0) + 10 * (groups.length - 1);
+  // the narrow strip stacks every button, so the card is never shorter than that stack
+  const stripHeight = (b) => 2 * PAD + 16 + (b.top.length + b.mid.length + b.bot.length) * 50 + 2 * 24;
 
   function heroLayout(p) {
     const ratio = p.w > 0 && p.h > 0 ? p.h / p.w : 1.25;
     const maxH = innerHeight - 96 - 48; // between the top edge and the bottom bar
-    // exactly three columns wide (one on a narrow window), so the grid's gaps around it stay even;
-    // a tall pin is shown whole inside that, over a soft blur of itself
-    const w = innerWidth >= 1000 ? 2 * 252 + 236 : 236;
-    const h = Math.round(Math.max(Math.min(w * ratio, maxH), Math.min(360, w * ratio)));
-    const rh = railHeight(railButtons(p));
-    const card = { x0: -w / 2, x1: w / 2, y0: -h / 2, y1: h / 2 };
-    const ry0 = Math.max(card.y0, -rh / 2);
-    const rail = { x0: w / 2 + RAIL_GAP, x1: w / 2 + RAIL_GAP + RAIL_W, y0: ry0, y1: ry0 + rh };
+    // picture and strip: exactly three columns (one on a narrow window), so the grid's gaps around it stay even;
+    // details add one more column. A tall pin is shown whole inside that, over a soft blur of itself.
+    const cols = innerWidth >= 1000 ? 2 * 252 + 236 : 236;
+    const wide = panelOpen;
+    const w = cols + (wide ? PANEL : 0);
+    const iw = cols - PAD - STRIP;
+    const ih = Math.round(Math.max(Math.min(iw * ratio, maxH - 2 * PAD), Math.min(360, iw * ratio)));
+    const h = Math.max(ih + 2 * PAD, stripHeight(railButtons(p)));
+    const card = { x0: -cols / 2, x1: -cols / 2 + w, y0: -h / 2, y1: h / 2 };
     // the visible middle sits above the bottom bar, so the camera looks a little below the card's centre
-    return { w, h, card, rail, focus: { x: 0, y: 45 } };
+    const fy = 45;
+    // a tall card reaching up beside the top-right buttons (~250px wide) moves left until it clears them,
+    // as far as the left edge allows (on a narrow window the wide card can't clear them all)
+    let shift = 0;
+    if (innerHeight / 2 + card.y0 - fy < 84) shift = Math.min(Math.max(0, w / 2 - innerWidth / 2 + 250), Math.max(0, innerWidth / 2 - w / 2 - 16));
+    return { w, h, iw, wide, card, focus: { x: card.x0 + w / 2 + shift, y: fy } };
   }
 
   function heroWorld(p, pins, open) {
     const w = new World(salt ^ hashStr("pin:" + p.id));
     const L = heroLayout(p);
     w.block(L.card);
-    w.block(L.rail);
     w.focus = L.focus;
     w.hero = { pin: p, L };
     w.open = open;
@@ -1421,12 +1441,13 @@
     const h = el("div", "hero");
     h.style.width = L.w + "px";
     h.style.height = L.h + "px";
-    const card = el("div", "card");
+    const card = el("div", "card" + (L.wide ? " wide" : ""));
     card.setAttribute("aria-label", p.title || "Pin");
     const media = el("div", "media");
+    media.style.width = L.iw + "px";
     if (p.color) media.style.background = p.color;
     const ratio = p.w > 0 && p.h > 0 ? p.h / p.w : 1.25;
-    if (Math.abs(L.h / L.w - ratio) > 0.02) {
+    if (Math.abs((L.h - 2 * PAD) / L.iw - ratio) > 0.02) {
       const bg = el("img", "bg");
       bg.alt = "";
       bg.src = p.src.m;
@@ -1455,15 +1476,29 @@
     zoom.dataset.a = "box-zoom";
     zoom.title = "Enlarge";
     zoom.setAttribute("aria-label", "Enlarge");
-    card.append(media, zoom);
+    media.append(zoom);
     const acts = el("div", "acts");
     acts.dataset.ui = "";
     acts.setAttribute("role", "toolbar");
     acts.setAttribute("aria-label", "Pin actions");
-    acts.style.left = L.w + RAIL_GAP + "px";
-    acts.style.top = L.rail.y0 - L.card.y0 + "px";
-    h.append(card, acts);
+    card.append(media, acts);
+    h.append(card);
     return h;
+  }
+
+  // details on or off: the card changes width, so the grid is laid out around it again
+  function togglePanel() {
+    const old = field && field.world;
+    if (!old || !old.hero) return;
+    panelOpen = !panelOpen;
+    lsSet(LS_PANEL, panelOpen ? "1" : "0");
+    const w = heroWorld(old.hero.pin, old.items, old.open);
+    const r = routes.get(cur);
+    if (r && r.world === old) r.world = w;
+    field.setWorld(w, {});
+    showHero(w);
+    const t = field.hero && field.hero.querySelector('[data-a="box-panel"]');
+    if (t) t.focus({ preventScroll: true });
   }
 
   function showHero(w) {
@@ -1492,8 +1527,19 @@
   function renderBoxActions() {
     const side = field && field.hero && field.hero.querySelector(".acts");
     if (!side || !boxPin) return;
-    side.innerHTML = railButtons(boxPin).map((g) => `<div class="glass grp">` + g.map(([a, icon, title]) =>
-      `<button class="ib${a === "save" ? " save" : ""}" data-a="box-${a}" title="${esc(title)}" aria-label="${esc(title)}" ${a === "save" && saved.has(boxPin.id) ? "data-done" : ""}>${icon}</button>`).join("") + `</div>`).join("");
+    const p = boxPin, b = railButtons(p);
+    const btn = ([a, icon, title]) =>
+      `<button class="ib${a === "save" ? " save" : ""}" data-a="box-${a}" title="${esc(title)}" aria-label="${esc(title)}"${a === "panel" ? ` aria-expanded="${panelOpen}"` : ""} ${a === "save" && saved.has(p.id) ? "data-done" : ""}>${icon}</button>`;
+    let host = "";
+    try { host = p.link ? new URL(p.link).hostname.replace(/^www\./, "") : ""; } catch {}
+    const s = savedMap.get(p.id);
+    // the details: shown only while the strip is wide (CSS), so the narrow strip stays buttons only
+    const info = `<div class="info"><h2>${esc(p.title || "Untitled pin")}</h2>` +
+      (host ? `<button class="src" data-a="box-visit" title="Visit site">${esc(host)}</button>` : "") +
+      (s ? `<small>Saved to ${esc(s.board)}</small>` : "") + `</div>`;
+    side.innerHTML = `<div class="st top">${b.top.map(btn).join("")}</div>` +
+      `<div class="st mid">${info}<div class="st row">${b.mid.map(btn).join("")}</div></div>` +
+      `<div class="st bot">${b.bot.map(btn).join("")}</div>`;
   }
 
   function boxAction(a, btn) {
@@ -1502,6 +1548,7 @@
     if (a === "close") closeBox();
     else if (a === "save") saved.has(p.id) ? unsavePin(p) : savePin(p, lastBoard());
     else if (a === "zoom") openLightbox(p);
+    else if (a === "panel") togglePanel();
     else if (a === "board") openBoardPicker(p, btn);
     else if (a === "share") copyLink(p);
     else if (a === "download") download(p);
@@ -1685,7 +1732,7 @@
     if (!pill) {
       pill = document.createElement("pinfield-toggle");
       const sh = pill.attachShadow({ mode: "open" });
-      sh.innerHTML = `<style>button{position:fixed;left:50%;translate:-50% 0;bottom:18px;z-index:2147483647;height:48px;padding:0 20px;border:0;border-radius:999px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8);color:#111;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .5px rgba(255,255,255,.4),0 0 0 .5px rgba(0,0,0,.07),0 8px 28px rgba(0,0,0,.16);cursor:pointer;display:flex;align-items:center;gap:8px;transition:scale .25s cubic-bezier(.2,.8,.2,1)}button:hover{background:rgba(255,255,255,.75)}button:active{scale:1.08}button:focus-visible{outline:3px solid #0074e8;outline-offset:2px}svg{width:18px;height:18px;fill:currentColor}</style><button title="Alt+Shift+F">${I.boards}Field view</button>`;
+      sh.innerHTML = `<style>button{position:fixed;left:50%;translate:-50% 0;bottom:18px;z-index:2147483647;height:48px;padding:0 20px;border:0;border-radius:999px;background:#fff;color:#111;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 28px rgba(0,0,0,.16);cursor:pointer;display:flex;align-items:center;gap:8px;transition:scale .25s cubic-bezier(.2,.8,.2,1)}button:hover{background:#ececec}button:active{scale:1.08}button:focus-visible{outline:3px solid #0074e8;outline-offset:2px}svg{width:18px;height:18px;fill:currentColor}</style><button title="Alt+Shift+F">${I.boards}Field view</button>`;
       sh.querySelector("button").addEventListener("click", () => setOn(true));
       document.documentElement.appendChild(pill);
     }
