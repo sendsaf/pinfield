@@ -11,7 +11,9 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
 ## Load it for development
 
 - Chrome / Edge / Brave: `chrome://extensions` → Developer mode → Load unpacked → pick this folder.
-- Firefox (140+): `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick `manifest.json`.
+- Firefox (140+): run `./build.sh`, then `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick
+  `dist/pinfield-<version>-firefox.zip`. (`manifest.json` in the folder is the Chrome one: picked directly,
+  Firefox loads Pinfield without its background script, so Select > Download won't work.)
 - Zen, or any Flatpak browser: run `./build.sh`, then Load Temporary Add-on → pick `~/Downloads/pinfield.zip`.
   A Flatpak browser only sees the one file you pick, so `manifest.json` alone loads without its scripts.
   Re-run `./build.sh` and press Reload after every change.

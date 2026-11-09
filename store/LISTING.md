@@ -1,6 +1,7 @@
 # Store listing (copy and paste)
 
-Upload `dist/pinfield-<version>-store.zip` to both stores. The store build uses the pushpin icon:
+Upload `dist/pinfield-<version>-store.zip` to the Chrome Web Store and `dist/pinfield-<version>-firefox-store.zip`
+to Firefox Add-ons. The store build uses the pushpin icon:
 see "Why the store build has no Pinterest logo" at the bottom.
 
 ## Name
@@ -62,7 +63,8 @@ session, only when the user presses those buttons. The downloads permission is u
 only when the user selects pins and presses Download: it saves those images (i.pinimg.com URLs only) into
 Downloads/Pinfield/<folder>/. Every value put into HTML is escaped (esc / cssUrl in
 src/main.js). No remote code, no minified or generated code, no build step: the source in the zip is the
-source.
+source. (The packing script only writes manifest.json's background key as "scripts" for Firefox, where
+the Chrome copy says "service_worker".)
 
 ## Why the store build has no Pinterest logo
 Pinterest's brand guidelines don't let third-party apps use the Pinterest logo as their icon, and both
