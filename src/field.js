@@ -175,6 +175,12 @@
       this._pump();
     }
 
+    // select mode: re-mark the tiles on screen after the selection changed (new tiles ask cb.isSelected)
+    markSelected() {
+      const is = this.cb.isSelected;
+      for (const e of this.live.values()) e.el.toggleAttribute("data-sel", !!is && !e.item.pending && is(e.item.id));
+    }
+
     rehover() {
       if (this.hovered && this.cb.onHover) this.cb.onHover(this.hovered.item, this.hovered.tile);
     }
@@ -414,7 +420,9 @@
         const dots = document.createElement("span");
         dots.className = "dots";
         dots.innerHTML = "<i></i><i></i><i></i>";
-        ph.append(img, dots);
+        const ck = document.createElement("span"); // select mode: the tick in the corner
+        ck.className = "ck";
+        ph.append(img, dots, ck);
         el.append(ph);
         e = { el, ph, img };
         img.addEventListener("load", () => { img.classList.add("in"); el.removeAttribute("data-ld"); this._done(e); });
@@ -439,6 +447,7 @@
       el.style.cssText = `transform:translate3d(${Math.round(t.x - t.w / 2)}px,${Math.round(t.y)}px,0);width:${t.w}px;height:${t.h}px`;
       e.ph.style.background = p.color || "var(--ph)";
       el.toggleAttribute("data-seed", t.key === this.pivotKey);
+      el.toggleAttribute("data-sel", !!(this.cb.isSelected && this.cb.isSelected(p.id)));
       if (this.rise) {
         el.classList.add("rise");
         el.style.setProperty("--d", Math.min(this.riseN++ * 16, 520) + "ms");
@@ -462,6 +471,7 @@
       el.setAttribute("aria-label", "Loading pin");
       el.style.cssText = `transform:translate3d(${Math.round(t.x - t.w / 2)}px,${Math.round(t.y)}px,0);width:${t.w}px;height:${t.h}px`;
       e.ph.style.background = "var(--ph)";
+      el.removeAttribute("data-sel");
       el.classList.remove("rise");
       e.img.classList.remove("in");
       el.toggleAttribute("data-ld", !!t.central);

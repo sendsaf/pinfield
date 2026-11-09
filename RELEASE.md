@@ -54,6 +54,10 @@ Upload new package; Firefox: Manage -> Upload new version). Installed copies upd
 
 ## Things to know
 
+- 1.1.0 adds the `downloads` permission (Select > Download). Its justification is in `store/LISTING.md`.
+  Chrome shows "Manage your downloads" and pauses the update on installed copies until each user accepts
+  it; Firefox asks the same on update. Expect a fresh review on both stores.
+
 - Pinterest's page changes from time to time. When Pinfield stops finding pins, the fix is almost always
   in `src/extract.js` or `src/hook.js`.
 - Pinfield is unofficial. Keep "not affiliated with Pinterest" in the listing, and keep the Pinterest logo

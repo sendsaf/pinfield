@@ -21,6 +21,9 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
 - Drag, flick, scroll or use the arrow keys to move. Ctrl + scroll, pinch or +/- to zoom (0 resets).
 - Hover a pin: Save (to your last board, press again to remove), board picker, visit site, copy link, and
   ⋯ for More like this, Download and Hide.
+- Select (top right): click pins to pick them (a drag still pans), then Download saves them all at full
+  size into `Downloads/Pinfield/<board or search> <date time>/`, numbered in the order you picked them.
+  Video pins save their cover picture. Esc or Cancel leaves select mode.
 - Click a pin: it takes a three-column slot in the middle of the grid, its buttons in a rail beside it, and
   Pinterest's related pins fill in around it. Enlarge from its corner; Esc or ✕ goes back to where you were.
 - Video pins play muted when the field is still, a few at a time.
@@ -37,5 +40,6 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
 - `src/extract.js`: pulls pins (images, video, link) out of any Pinterest JSON.
 - `src/layout.js`: the endless world, worked out from column and row numbers; an open pin is a block the grid flows around.
 - `src/field.js`: the renderer: motion first, everything else waits until the field is still.
-- `src/main.js`: routes, bars, quick actions, the open pin, explore, boards.
+- `src/main.js`: routes, bars, quick actions, the open pin, explore, boards, select mode.
+- `src/background.js`: saves selected pins into one folder with the browser's downloads API (the only use of the `downloads` permission).
 - `tools/icon.js`, `tools/icons.sh`: draw and render the icon. `tools/shots.js`: store screenshots.

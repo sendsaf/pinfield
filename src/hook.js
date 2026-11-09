@@ -391,6 +391,13 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       return true;
     },
+    // select mode: does this size exist? (some pins have no "originals"; i.pinimg.com answers 403 for those)
+    // asked from here because i.pinimg.com only lets pinterest.com read its answers
+    async probe({ url }) {
+      if (typeof url !== "string" || !/^https:\/\/i\.pinimg\.com\//.test(url)) throw new Error("bad url");
+      const r = await nativeFetch.call(window, url, { method: "HEAD", credentials: "omit" });
+      return r.ok;
+    },
   };
   document.addEventListener("pf:api", async (e) => {
     let req;

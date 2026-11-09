@@ -1,6 +1,6 @@
 # Pinfield privacy policy
 
-Last updated: 29 October 2026
+Last updated: 9 November 2026
 
 Pinfield is a browser extension that changes how Pinterest looks in your own browser. It shows the pins
 Pinterest sends you as an endless field you can pan and zoom.
@@ -21,8 +21,12 @@ Pinterest sends you as an endless field you can pan and zoom.
 
 ## Permissions
 
-Pinfield runs only on Pinterest's websites. It asks for no other site access and uses no browser features
-beyond running its scripts on those pages.
+Pinfield runs only on Pinterest's websites. It asks for no other site access. Besides running its scripts
+on those pages, it uses one browser feature:
+
+- **Downloads**, so that "Select" can save the pins you picked into one folder in your Downloads
+  (Downloads/Pinfield/...). It is used only when you press Download, and only for the pictures you
+  selected, fetched from Pinterest's image servers. Pinfield does not read your download history.
 
 ## Contact
 

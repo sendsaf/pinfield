@@ -219,6 +219,9 @@
   // ---------- overlay ----------
   let host = null, field = null, ui = {};
   let bootTimer = 0, keyGuard = false, boxPin = null;
+  // select mode: picked pins in the order you picked them; selNote is a passing message in the pill ("Saving 3")
+  let selecting = false, selNote = null, selT = 0;
+  const selected = new Map();
   const isOn = () => lsGet(LS.on, "1") !== "0";
 
   const STYLE = `
@@ -463,7 +466,38 @@
   .chip i{width:32px;height:32px;border-radius:50%;background:var(--ph) center/cover;flex:none}
   .sg:focus-visible,.chip:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-  @media (prefers-reduced-motion:reduce){.layer.enter,.t.rise,.load i,.qa,.toast,.pop,.sugg,.card,.acts,.box,.dots i{animation:none!important}.dock,.corner,.ib,.q,.acts .tag,.hero .zoom{transition:none}.ph img,.ph .vid{transition:none}}
+  /* select: a pill left of the corner tools. It grows to "3 selected | Download | Cancel" as you pick pins;
+     its width is set from its contents so the change can animate. --cw is the corner's width. */
+  .sel{position:absolute;top:16px;right:calc(16px + var(--cw,158px) + 8px);z-index:9;display:flex;justify-content:flex-end;overflow:hidden;transform-origin:100% 0;
+    transition:width .32s cubic-bezier(.2,.8,.2,1),scale .35s cubic-bezier(.2,.8,.2,1),translate .35s cubic-bezier(.2,.8,.2,1),background .2s}
+  /* follows the corner as it shrinks while you move */
+  .root[data-moving] .sel{scale:.86;translate:calc(var(--cw,158px) * .14) 0;transition-delay:.25s}
+  .boards:not([hidden]) ~ .sel{display:none}
+  .sel .in{display:flex;align-items:center;gap:2px;flex:none;white-space:nowrap}
+  .sb{height:48px;display:inline-flex;align-items:center;gap:6px;padding:0 18px;border:0;border-radius:24px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;
+    transition:scale .25s cubic-bezier(.2,.8,.2,1),background .2s}
+  .sb svg{width:18px;height:18px}
+  .sb:hover{background:var(--press)}
+  .sb:active{scale:1.08;background:var(--lens)}
+  .sb:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
+  .sb.dl{background:#e60023;color:#fff}
+  .sb.dl:hover{background:#c8001f}
+  .sb.dl:active{background:#ad081b}
+  .sb[disabled]{cursor:default;opacity:.6}
+  .sel .lbl{display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 10px 0 16px;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
+  .sel .lbl svg{width:18px;height:18px}
+  .sel .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  @media (max-width:560px){.sel{top:76px;right:16px}.root[data-moving] .sel{translate:0 0}}
+  /* select mode: a ring and a tick on each picked pin; the hover buttons step aside */
+  .stage[data-select] .qa{display:none}
+  .stage[data-select]{cursor:default}
+  .ck{position:absolute;top:10px;right:10px;z-index:4;width:28px;height:28px;border-radius:50%;display:none;pointer-events:none;
+    background:rgba(255,255,255,.7);box-shadow:inset 0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.25);transition:background .15s,scale .2s cubic-bezier(.2,.8,.2,1)}
+  .stage[data-select] .t[href] .ck{display:block}
+  .t[data-sel] .ck{display:block;background:#e60023;scale:1.08}
+  .t[data-sel] .ck::after{content:"";position:absolute;left:10px;top:6px;width:6px;height:12px;border:solid #fff;border-width:0 2.5px 2.5px 0;rotate:45deg}
+  .t[data-sel] .ph::after{content:"";position:absolute;inset:0;z-index:4;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 4px #e60023,inset 0 0 0 6px rgba(255,255,255,.85)}
+  @media (prefers-reduced-motion:reduce){.layer.enter,.t.rise,.load i,.qa,.toast,.pop,.sugg,.card,.acts,.box,.dots i{animation:none!important}.dock,.corner,.ib,.q,.acts .tag,.hero .zoom,.sel,.sb,.ck{transition:none}.ph img,.ph .vid{transition:none}}
   `;
 
   const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -550,8 +584,12 @@
         <span class="q ic" data-q="more" role="button" title="More" aria-label="More">${I.more}</span>
       </span>`);
 
-    root.append(load, note, boards, box, dock, corner, tune, menu, sugg, toast);
-    ui = { root, dock, corner, tune, menu, boards, load, note, box, sugg, toast, qa };
+    const sel = el("div", "glass grp sel", `<span class="in"></span>`);
+    sel.setAttribute("role", "toolbar");
+    sel.setAttribute("aria-label", "Select pins");
+
+    root.append(load, note, boards, box, dock, corner, sel, tune, menu, sugg, toast);
+    ui = { root, dock, corner, sel, tune, menu, boards, load, note, box, sugg, toast, qa };
     applyBg(getBg());
 
     const input = dock.querySelector("input");
@@ -579,7 +617,7 @@
         addEventListener(t, (e) => {
           if (!host) return;
           const path = e.composedPath();
-          if (!path.some((n) => n === ui.dock || n === ui.corner || n === ui.box || n === ui.menu || n === ui.tune || n === ui.boards || n === ui.sugg)) return;
+          if (!path.some((n) => n === ui.dock || n === ui.corner || n === ui.sel || n === ui.box || n === ui.menu || n === ui.tune || n === ui.boards || n === ui.sugg)) return;
           // stopping here also stops listeners inside our own UI, so the search box's keys are handled first
           if (t === "keydown" && path[0] === ui.dock.querySelector("input")) searchKey(e);
           e.stopPropagation();
@@ -590,8 +628,9 @@
     field = new Field(root, {
       quickEl: qa,
       onNeedMore: needMore,
-      onOpen: (pin, tile) => openBox(pin, tile),
-      onQuick: quick,
+      onOpen: (pin, tile) => (selecting ? toggleSelect(pin) : openBox(pin, tile)),
+      onQuick: (name, pin, tile, btn) => (selecting ? toggleSelect(pin) : quick(name, pin, tile, btn)),
+      isSelected: (id) => selected.has(id),
       onHover: dressQuick,
       onCamera: (c) => { const r = routes.get(cur); if (r) r.camera = { x: c.x, y: c.y, z: c.z }; },
       onMove: (m) => {
@@ -610,6 +649,8 @@
     markNav();
     renderGuides();
     document.documentElement.appendChild(host);
+    sel.style.setProperty("--cw", corner.offsetWidth + "px");
+    renderSel();
     moveLens();
     hidePage(true);
   }
@@ -617,6 +658,7 @@
   function unmount() {
     if (!host) return;
     boxPin = null; openHere = null;
+    selecting = false; selected.clear(); clearTimeout(selT); selNote = null;
     field.destroy();
     host.remove();
     host = field = null;
@@ -684,6 +726,9 @@
     else if (act === "create") { setOn(false); location.assign("/pin-creation-tool/"); }
     else if (act === "native") setOn(false);
     else if (act === "tune") togglePop(ui.tune, a);
+    else if (act === "sel-on") setSelecting(true);
+    else if (act === "sel-off") setSelecting(false);
+    else if (act === "sel-dl") downloadSelected();
     else if (act === "lb-close") closeLightbox();
     else if (act.startsWith("box-")) boxAction(act.slice(4), a);
     else if (act === "acct-created") { closeAll(); goTo("/" + account.username + "/_created/"); }
@@ -943,6 +988,113 @@
     api("download", { url: pin.src.o || pin.src.l, name: "pin-" + pin.id })
       .catch(() => api("download", { url: pin.src.l, name: "pin-" + pin.id }))
       .then(() => toast("Downloaded"), () => toast("Couldn't download this one"));
+  }
+
+  // ---------- select mode: pick pins, then save them all into one folder ----------
+  function setSelecting(on) {
+    if (!field) return;
+    selecting = on;
+    if (!on) selected.clear();
+    clearTimeout(selT);
+    selNote = null;
+    field.stage.toggleAttribute("data-select", on);
+    field.markSelected();
+    if (on) closePops();
+    renderSel();
+  }
+
+  function toggleSelect(pin) {
+    if (selNote) return; // saving
+    const p = seen.get(pin.id) || pin;
+    if (selected.has(p.id)) selected.delete(p.id);
+    else selected.set(p.id, p);
+    field.markSelected();
+    renderSel();
+  }
+
+  function renderSel() {
+    const s = ui.sel;
+    if (!s) return;
+    const inner = s.querySelector(".in");
+    const root = s.getRootNode();
+    const hadFocus = !!root.activeElement && s.contains(root.activeElement);
+    const n = selected.size;
+    let say;
+    if (selNote) {
+      say = selNote.text;
+      inner.innerHTML = `<span class="lbl">${selNote.icon || ""}${esc(say)}</span>`;
+    } else if (!selecting) {
+      say = "";
+      inner.innerHTML = `<button class="sb" data-a="sel-on" title="Select pins to download">${I.check}Select</button>`;
+    } else {
+      say = n ? n + " selected" : "Click pins to select them";
+      inner.innerHTML = `<span class="lbl">${n ? n + " selected" : "Click pins"}</span>` +
+        (n ? `<button class="sb dl" data-a="sel-dl" title="Save the selected pins into one folder">${I.download}Download</button>` : "") +
+        `<span class="sep" aria-hidden="true"></span><button class="sb" data-a="sel-off" title="Cancel (Esc)">Cancel</button>`;
+    }
+    // one live region that stays put, so screen readers hear each change
+    let live = s.querySelector(".sr");
+    if (!live) { live = el("span", "sr"); live.setAttribute("role", "status"); s.append(live); }
+    live.textContent = say;
+    s.style.width = inner.offsetWidth + 10 + "px"; // + the group's padding; a fixed width is what lets it animate
+    if (hadFocus) {
+      const b = inner.querySelector('[data-a="sel-dl"],[data-a="sel-off"],[data-a="sel-on"]');
+      if (b) b.focus({ preventScroll: true });
+      else field && field.stage.focus({ preventScroll: true });
+    }
+  }
+
+  // the folder inside Downloads/Pinfield: the board or search you're on, and when
+  function batchFolder() {
+    const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}`;
+    const path = location.pathname, pid = pinIdOf(path);
+    let name = "";
+    if (path.startsWith("/search/")) name = new URLSearchParams(location.search).get("q") || "";
+    else if (pid) name = "pin " + pid;
+    else {
+      const m = path.match(/^\/([\w.-]+)\/([\w%.-]+)\/?$/); // /username/board/
+      if (m && m[1] !== "ideas" && !m[2].startsWith("_")) { try { name = decodeURIComponent(m[2]).replace(/-/g, " "); } catch {} }
+    }
+    return (name ? name.trim().slice(0, 60) + " " : "") + stamp;
+  }
+
+  // the largest picture there is: the original if Pinterest has one for this pin, else 736px
+  const pinimg = (u) => typeof u === "string" && /^https:\/\/i\.pinimg\.com\//.test(u);
+  async function bestUrl(p) {
+    const o = pinimg(p.src.o) ? p.src.o : null, l = pinimg(p.src.l) ? p.src.l : null;
+    if (!o || o === l) return l;
+    if (!l) return o;
+    try { return (await api("probe", { url: o })) ? o : l; } catch { return o; }
+  }
+  async function eachLimit(xs, n, fn) {
+    const out = new Array(xs.length);
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
+      while (i < xs.length) { const k = i++; out[k] = await fn(xs[k]); }
+    }));
+    return out;
+  }
+
+  const ext = globalThis.browser || globalThis.chrome;
+  async function downloadSelected() {
+    const pins = [...selected.values()];
+    if (!pins.length || selNote) return;
+    selNote = { text: "Saving " + pins.length + "…" };
+    renderSel();
+    let res = null;
+    try {
+      // video pins: their cover picture is saved (p.src), not the video
+      const files = (await eachLimit(pins, 4, async (p) => ({ id: p.id, url: await bestUrl(p) }))).filter((f) => f.url);
+      res = await ext.runtime.sendMessage({ type: "pf:download", folder: batchFolder(), files });
+    } catch {}
+    if (!selecting) return; // left select mode (or Pinfield) meanwhile
+    const ok = (res && res.ok) || 0, failed = pins.length - ok;
+    selNote = !ok ? { text: "Couldn't download these" }
+      : { icon: I.check, text: failed ? `Saved ${ok}, ${failed} didn't download` : `Saved ${ok} to Downloads/Pinfield` };
+    renderSel();
+    // saved: a moment to read it, then select mode ends. Nothing saved: back to the selection to try again
+    selT = setTimeout(() => { if (ok) setSelecting(false); else { selNote = null; renderSel(); } }, ok ? 2200 : 2600);
   }
 
   function hidePin(pin, tile) {
@@ -1537,6 +1689,7 @@
     if (ui.sugg && !ui.sugg.hidden) closeSugg();
     else if (popAnchor) closePops();
     else if (closeLightbox()) {}
+    else if (selecting) { if (!selNote) setSelecting(false); } // not while it's saving
     else if (boxPin) closeBox();
     else if (ui.boards && !ui.boards.hidden) toggleBoards(false);
   }, true);
