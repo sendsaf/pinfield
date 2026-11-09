@@ -85,6 +85,9 @@
       // the same picture is often saved as several pins: show it once
       const sig = sigOf(p);
       if (hidden.has(p.id) || r.ids.has(p.id) || r.sigs.has(sig)) continue;
+      // no size from Pinterest: measure it before it gets a box, or a wide picture lands in a guessed tall one
+      const q = old || p;
+      if (!(q.w > 0 && q.h > 0) && !q.sized) { sizeThen(q, key); continue; }
       r.ids.add(p.id);
       r.sigs.add(sig);
       r.pins.push(old || p);
@@ -98,6 +101,45 @@
       if (key === cur && field) field.refresh();
     }
     if (key === cur) maybeBoot();
+  }
+
+  // Pins Pinterest sent without a size wait here while their smallest picture (236px, the one the field shows
+  // first anyway, so it's then in the cache) loads far enough to tell its width and height. Then they join their
+  // route like any pin. A few at a time; one that can't be measured in 4s goes in with a guessed shape.
+  const sizing = new Map(); // pin id -> routes waiting for it
+  const sizeQ = [];
+  let sizeN = 0;
+  function sizeThen(p, key) {
+    const keys = sizing.get(p.id);
+    if (keys) { keys.add(key); return; }
+    sizing.set(p.id, new Set([key]));
+    sizeQ.push(p);
+    sizeNext();
+  }
+  function sizeNext() {
+    while (sizeN < 6 && sizeQ.length) {
+      const p = sizeQ.shift(), im = new Image();
+      sizeN++;
+      let done = false, poll = 0;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearInterval(poll); clearTimeout(t);
+        if (im.naturalWidth > 0 && im.naturalHeight > 0) { p.w = im.naturalWidth; p.h = im.naturalHeight; }
+        p.sized = true; // measured, or given up on: don't ask again
+        im.removeAttribute("src");
+        sizeN--;
+        const keys = sizing.get(p.id) || [];
+        sizing.delete(p.id);
+        for (const k of keys) ingest([p], k);
+        sizeNext();
+      };
+      const t = setTimeout(finish, 4000);
+      im.onload = im.onerror = finish;
+      // the size is known once the header is in, long before the whole picture is
+      poll = setInterval(() => { if (im.naturalWidth > 0) finish(); }, 40);
+      im.src = p.src.s || p.src.m || p.src.l;
+    }
   }
 
   const idle = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 800 }) : setTimeout(fn, 50));
