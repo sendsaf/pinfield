@@ -76,7 +76,11 @@
     const fresh = [];
     for (const p of pins) {
       const old = seen.get(p.id);
-      if (old) { if (!old.video && p.video) old.video = p.video; if (!old.link && p.link) old.link = p.link; }
+      if (old) {
+        if (!old.video && p.video) old.video = p.video;
+        if (!old.link && p.link) old.link = p.link;
+        if (!(old.w > 0 && old.h > 0) && p.w > 0 && p.h > 0) { old.w = p.w; old.h = p.h; } // a later copy knows its size
+      }
       else seen.set(p.id, p);
       // the same picture is often saved as several pins: show it once
       const sig = sigOf(p);
@@ -251,6 +255,11 @@
   .ph img,.ph .vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0}
   .ph img{opacity:0;transition:opacity .2s ease}
   .ph img.in{opacity:1}
+  /* while the field moves, pictures that arrive just appear: a fade on each one made the browser redo frame
+     work for every tile at once (measured: about a third of the dropped frames when panning zoomed out) */
+  .layer.mv .ph img,.layer.mv .ph .vid{transition:none}
+  /* a box taller than its picture (a wide pin that landed in a tall spot): the whole picture, on its own colour */
+  .t[data-fit] .ph img,.t[data-fit] .ph .vid{object-fit:contain;object-position:50% 50%}
   .ph .vid{opacity:0;transition:opacity .25s;pointer-events:none}
   .ph .vid.on{opacity:1}
   .stage[data-ql="2"] .ph img,.stage[data-ql="2"] .t{transition:none}

@@ -93,12 +93,12 @@
     // The pin a spot shows. A waiting spot takes the next arrived pin only once it is on (or about to come on)
     // screen, so new pins land where you're looking, not in spots made earlier off screen. Once the feed has
     // ended, a spot still waiting gets a repeat chosen away from its copies. -1 = still waiting.
-    at(i, c, y, onScreen) {
+    at(i, c, y, onScreen, h) {
       if (i >= 0) return i;
       let f = this.fill.get(i);
       if (f !== undefined) return f;
       if (!onScreen) return -1;
-      if (this.next < this.items.length) f = this.next++;
+      if (this.next < this.items.length) f = this.fitNext(h);
       else if (!this.open) f = this.repeatFor(c, Math.floor(y / 300), y);
       else return -1;
       this.fill.set(i, f);
@@ -106,12 +106,28 @@
     }
 
     imgH(i) {
-      const p = this.items[i];
+      // a spot still waiting for its pin borrows the shape of a pin already here, so the field keeps the feed's
+      // real mix of tall, square and wide boxes (it used to make every waiting spot portrait)
+      const n = this.items.length;
+      const p = i >= 0 ? this.items[i] : n ? this.items[Math.floor(hash(i, 7, this.salt) * n)] : null;
       const ratio = p && p.w > 0 && p.h > 0 ? p.h / p.w : 1.25 + hash(i, 7, this.salt) * 0.4;
       return Math.round(W * Math.min(2.6, Math.max(0.45, ratio)));
     }
 
     height(i) { return this.imgH(i); }
+
+    // Fill a waiting spot of height h: of the next few pins in the queue, the one whose shape fits the box best
+    // moves to the front, so a wide picture isn't squeezed into a tall box. Unplaced pins only, so nothing moves.
+    fitNext(h) {
+      const a = this.next, end = Math.min(this.items.length, a + 12);
+      let best = a, bd = Infinity;
+      if (h > 0) for (let k = a; k < end; k++) {
+        const d = Math.abs(Math.log(this.imgH(k) / h));
+        if (d < bd) { bd = d; best = k; }
+      }
+      if (best !== a) { const t = this.items[best]; this.items[best] = this.items[a]; this.items[a] = t; }
+      return this.next++;
+    }
 
     // Swap a pin out of the world (e.g. hidden) without moving anything: the next unplaced pin takes its box.
     replace(i) {
@@ -233,7 +249,7 @@
             const t = list[k];
             if (asc ? t.y > rect.y1 : t.y + t.h < rect.y0) break;
             if (t.i > maxSeen) maxSeen = t.i; // waiting spots are negative and don't count
-            const j = t.i >= 0 ? t.i : this.at(t.i, c, t.y, c * COL + W / 2 > view.x0 && c * COL - W / 2 < view.x1 && t.y + t.h > view.y0 && t.y < view.y1);
+            const j = t.i >= 0 ? t.i : this.at(t.i, c, t.y, c * COL + W / 2 > view.x0 && c * COL - W / 2 < view.x1 && t.y + t.h > view.y0 && t.y < view.y1, t.h);
             out.push({ key: c + "," + t.r, c, x: c * COL, y: t.y, w: W, h: t.h, i: j < 0 ? t.i : j, item: j < 0 ? WAIT : this.items[j] });
           }
         }
