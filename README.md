@@ -25,7 +25,8 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
   ⋯ for More like this, Download and Hide.
 - Select (the dashed tick, top right): click pins to pick them (a drag still pans), then Download saves them all at full
   size into `Downloads/Pinfield/<board or search> <date time>/`, numbered in the order you picked them.
-  Video pins save their cover picture. Esc or Cancel leaves select mode.
+  Video pins save their cover picture. Signed in, Save puts every selected pin on one board (one at a time,
+  skipping pins you already saved here). Esc or Cancel leaves select mode.
 - Click a pin: it opens as a Polaroid in a three-column slot in the middle of the grid, its buttons on a strip
   down its right side (Save on top, Details at the bottom: the strip widens for the title and source), and
   Pinterest's related pins fill in around it. Enlarge from its corner; Esc or ✕ goes back to where you were.
@@ -35,7 +36,8 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
 - Bottom bar: back, home, explore (Pinterest's Explore: interests, trending, featured boards, what's new),
   search, your account (profile and boards). Top right: create, look and speed, normal Pinterest
   (Alt+Shift+F switches back).
-- Look and speed: background colour, and Motion: Auto (adjusts to your computer), Smooth (lightest) or Sharp.
+- Look and speed: background colour, Motion: Auto (adjusts to your computer), Smooth (lightest) or Sharp, and
+  (signed in) which board the quick Save button goes to: a board you pick, or the last board you used.
 
 ## Files
 

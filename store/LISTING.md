@@ -18,7 +18,7 @@ long scroll.
 - Zoom out to see hundreds of pins at once, or in to see one closely.
 - Open a pin and it takes centre stage in the grid, with Pinterest's related pins laid out around it.
 - Save, save to a board, unsave, copy link, download and visit, right from the pin.
-- Select: pick any number of pins and download them all, full size, into one folder.
+- Select: pick any number of pins, then save them all to one board or download them all, full size, into one folder.
 - Search with Pinterest's own suggestions, browse Explore, and see your boards.
 - Light Pinterest look with any background colour you like, and a Smooth mode for slower computers.
 

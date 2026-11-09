@@ -332,6 +332,11 @@
   .seg{display:flex;gap:4px;padding:4px 8px 8px}
   .seg button{flex:1;height:34px;border:0;border-radius:17px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:0 12px}
   .seg button[aria-pressed="true"]{background:var(--fg);color:var(--chrome)}
+  .qsb{display:flex;align-items:center;justify-content:space-between;gap:8px;width:calc(100% - 16px);height:40px;margin:4px 8px 8px;border:0;border-radius:20px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:14px;padding:0 10px 0 16px;cursor:pointer}
+  .qsb:hover{background:var(--btn-h)}
+  .qsb span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .qsb svg{width:18px;height:18px}
+  .qsb:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   .mi{display:flex;align-items:center;gap:12px;width:100%;height:44px;border:0;border-radius:10px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;padding:0 12px;text-align:left}
   .mi{transition:background .15s}
   .mi:hover{background:var(--press)}
@@ -558,7 +563,8 @@
         <button data-qm="auto" aria-pressed="false" title="Adjusts to your computer">Auto</button>
         <button data-qm="smooth" aria-pressed="false" title="Lightest: for slower computers">Smooth</button>
         <button data-qm="sharp" aria-pressed="false" title="Sharpest images and video">Sharp</button>
-      </div>`);
+      </div>
+      ${canSave() ? `<h3>Quick save goes to</h3><button class="qsb" data-a="quick-board" aria-haspopup="listbox" title="The board the red Save button on a pin saves to"><span></span>${I.chev}</button>` : ""}`);
     tune.hidden = true;
     tune.setAttribute("role", "dialog");
     tune.setAttribute("aria-label", "Look and speed");
@@ -661,6 +667,7 @@
     root.insertBefore(field.stage, root.firstChild);
     field.setQuality(lsGet(LS.q, "auto"));
     markQuality();
+    dressQuickSetting();
     if (!canSave()) dock.querySelector('[data-a="boards"]').hidden = true;
     else dressAccount();
     markNav();
@@ -743,6 +750,8 @@
     else if (act === "create") { setOn(false); location.assign("/pin-creation-tool/"); }
     else if (act === "native") setOn(false);
     else if (act === "tune") togglePop(ui.tune, a);
+    else if (act === "quick-board") openBoardPicker(ui.corner.querySelector('[data-a="tune"]'), setQuick, "quick", { last: true });
+    else if (act === "sel-save") openBoardPicker(a, saveSelected, "sel");
     else if (act === "sel-on") setSelecting(true);
     else if (act === "sel-off") setSelecting(false);
     else if (act === "sel-dl") downloadSelected();
@@ -754,6 +763,19 @@
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast("Profile link copied"), () => toast("Couldn't copy the link"));
     }
     else if (act === "acct-native" || act === "acct-create") { setOn(false); location.assign("/" + account.username + "/"); }
+  }
+
+  function dressQuickSetting() {
+    const s = ui.tune && ui.tune.querySelector('[data-a="quick-board"] span');
+    if (!s) return;
+    const q = quickFixed(), lb = lastBoard();
+    s.textContent = q ? (q.board ? q.board.name : "Profile") : "Last board used" + (lb ? " (" + lb.name + ")" : "");
+  }
+  function setQuick(b) {
+    lsSet(LS_QUICK, b === "last" ? "null" : JSON.stringify({ board: b }));
+    dressQuickSetting();
+    if (field) field.rehover();
+    toast(b === "last" ? "Quick save follows the last board you used" : "Quick save goes to " + (b ? b.name : "Profile"));
   }
 
   function markQuality() {
@@ -951,6 +973,11 @@
   // ---------- quick actions ----------
   let menuPin = null, menuTile = null;
   const lastBoard = () => lsJson(LS.board, null);
+  // quick save (the red Save on a pin): the board you set in Look and speed, else the last one you saved to.
+  // stored as { board: {id,name} | null } (null = your profile); nothing stored = follow the last board
+  const LS_QUICK = "pinfield:quick";
+  const quickFixed = () => { const q = lsJson(LS_QUICK, null); return q && typeof q === "object" && "board" in q ? q : null; };
+  const quickBoard = () => { const q = quickFixed(); return q ? q.board : lastBoard(); };
 
   function dressQuick(pin) {
     const qa = ui.qa;
@@ -958,7 +985,7 @@
     const b = qa.querySelector('[data-q="board"]'), s = qa.querySelector('[data-q="save"]');
     b.hidden = s.hidden = !signed;
     if (signed) {
-      const lb = lastBoard();
+      const lb = quickBoard();
       b.querySelector("span").textContent = lb ? lb.name : "Profile";
       s.textContent = saved.has(pin.id) ? "Saved" : "Save";
       s.toggleAttribute("data-done", saved.has(pin.id));
@@ -968,8 +995,8 @@
   }
 
   function quick(name, pin, tile, btn) {
-    if (name === "save") return saved.has(pin.id) ? unsavePin(pin) : savePin(pin, lastBoard());
-    if (name === "board") return openBoardPicker(pin, btn);
+    if (name === "save") return saved.has(pin.id) ? unsavePin(pin) : savePin(pin, quickBoard());
+    if (name === "board") return openBoardPicker(btn, (b) => savePin(pin, b), pin);
     if (name === "visit") return pin.link && window.open(pin.link, "_blank", "noopener,noreferrer");
     if (name === "share") return copyLink(pin);
     if (name === "more") {
@@ -1046,7 +1073,8 @@
     } else {
       say = n ? n + " selected" : "Click pins to select them";
       inner.innerHTML = `<span class="lbl">${n ? n + " selected" : "Click pins to select"}</span>` +
-        (n ? `<button class="sb dl" data-a="sel-dl" title="Save the selected pins into one folder">${I.download}Download</button>` : "") +
+        (n && canSave() ? `<button class="sb dl" data-a="sel-save" title="Save the selected pins to a board" aria-haspopup="listbox">${I.pin}Save</button>` : "") +
+        (n ? `<button class="sb${canSave() ? "" : " dl"}" data-a="sel-dl" title="Download the selected pins into one folder">${I.download}Download</button>` : "") +
         `<span class="sep" aria-hidden="true"></span><button class="sb" data-a="sel-off" title="Cancel (Esc)">Cancel</button>`;
     }
     // one live region that stays put, so screen readers hear each change
@@ -1055,7 +1083,7 @@
     live.textContent = say;
     s.style.width = inner.offsetWidth + 10 + "px"; // + the group's padding; a fixed width is what lets it animate
     if (hadFocus) {
-      const b = inner.querySelector('[data-a="sel-dl"],[data-a="sel-off"],[data-a="sel-on"]');
+      const b = inner.querySelector('[data-a="sel-save"],[data-a="sel-dl"],[data-a="sel-off"],[data-a="sel-on"]');
       if (b) b.focus({ preventScroll: true });
       else field && field.stage.focus({ preventScroll: true });
     }
@@ -1091,6 +1119,40 @@
       while (i < xs.length) { const k = i++; out[k] = await fn(xs[k]); }
     }));
     return out;
+  }
+
+  // save every selected pin to one board, one at a time (Pinterest has no bulk save; a short pause between
+  // saves keeps it from looking like a bot). Pins you already saved here are skipped. Three failures in a row stop it.
+  async function saveSelected(board) {
+    const pins = [...selected.values()].filter((p) => /^\d+$/.test(p.id));
+    if (!pins.length || selNote || !canSave()) return;
+    const todo = pins.filter((p) => !saved.has(p.id)), skipped = pins.length - todo.length;
+    const where = board ? board.name : "Profile";
+    let ok = 0, failed = 0, streak = 0;
+    for (let k = 0; k < todo.length; k++) {
+      if (!selecting) break;
+      selNote = { text: `Saving ${k + 1} of ${todo.length}…` };
+      renderSel();
+      const p = todo[k];
+      try {
+        const res = await api("save", { pinId: p.id, boardId: board ? board.id : null });
+        savedMap.set(p.id, { id: res.id, board: board ? board.name : res.board || "Profile" });
+        ok++; streak = 0;
+      } catch { failed++; if (++streak >= 3) break; }
+      if (k < todo.length - 1) await new Promise((r) => setTimeout(r, 400));
+    }
+    keepSaved();
+    if (ok) { if (board) lsSet(LS.board, JSON.stringify(board)); noteBoard(board ? board.id : null); dressQuickSetting(); }
+    if (field) field.rehover();
+    if (!selecting) return;
+    const left = todo.length - ok - failed; // not tried after three failures in a row
+    const notDone = failed + left;
+    selNote = ok || skipped && !notDone
+      ? { icon: I.check, text: (ok ? `Saved ${ok} to ${where}` : "Already saved") + (notDone ? `, ${notDone} didn't save` : "") }
+      : { text: "Couldn't save these" };
+    renderSel();
+    const done = ok > 0 || (skipped && !notDone);
+    selT = setTimeout(() => { if (done) setSelecting(false); else { selNote = null; renderSel(); } }, done ? 2200 : 2600);
   }
 
   const ext = globalThis.browser || globalThis.chrome;
@@ -1134,6 +1196,7 @@
       keepSaved();
       if (board) lsSet(LS.board, JSON.stringify(board));
       noteBoard(board ? board.id : null);
+      dressQuickSetting();
       afterSaveChange(pin, "Saved to " + where);
     } catch (err) {
       toast("Couldn't save: " + (err.message || "try again"));
@@ -1209,16 +1272,18 @@
     return boardsCache;
   }
 
-  let pickPin = null;
+  let pickDo = null, pickKey = null; // what choosing a board does, and what the picker was opened for
   // when you last saved to each board here (Pinterest's list order isn't "last saved to")
   const LS_BT = "pinfield:boardtimes";
   const boardTimes = () => lsJson(LS_BT, {});
   function noteBoard(id) { const t = boardTimes(); t[id || "profile"] = Date.now(); lsSet(LS_BT, JSON.stringify(t)); }
   const lastSaved = (b, t) => Math.max(t[b.id] || 0, Date.parse(b.last || "") || 0);
-  function openBoardPicker(pin, anchor) {
+  // extra: { last: true } adds a "Last board you saved to" row (for the quick-save setting)
+  function openBoardPicker(anchor, onPick, key, extra = {}) {
     // the same button again closes it
-    if (!ui.menu.hidden && popAnchor === anchor && pickPin === pin) return closePops();
-    pickPin = pin;
+    if (!ui.menu.hidden && popAnchor === anchor && pickKey === key) return closePops();
+    pickDo = onPick;
+    pickKey = key;
     const m = ui.menu;
     m.innerHTML = `<div class="bp"><input type="search" placeholder="Search boards" aria-label="Search boards"><div class="list" role="listbox"><div class="load" style="position:static;height:60px"><i></i><i></i><i></i></div></div></div>`;
     togglePop(m, anchor, true);
@@ -1232,7 +1297,9 @@
         .filter((x) => !q || x.b.name.toLowerCase().includes(q))
         .sort((x, y) => y.at - x.at || x.i - y.i)
         .map((x) => x.b);
-      list.innerHTML = rows.map((b) => b.profile
+      const last = extra.last && (!q || "last board".includes(q))
+        ? `<button class="bd" data-board="__last" data-name="" role="option"><i>${I.back}</i><span>Last board you saved to</span></button>` : "";
+      list.innerHTML = last + rows.map((b) => b.profile
         ? `<button class="bd" data-board="" data-name="Profile" role="option"><i>${I.native}</i><span>Profile</span></button>`
         : `<button class="bd" data-board="${esc(b.id)}" data-name="${esc(b.name)}" role="option"><i style='background-image:${cssUrl(b.cover)}'></i><span>${esc(b.name)}</span></button>`).join("");
     };
@@ -1241,7 +1308,9 @@
   }
   function pickBoard(id, name) {
     closePops();
-    if (pickPin) savePin(pickPin, id ? { id, name } : null);
+    const fn = pickDo;
+    pickDo = pickKey = null;
+    if (fn) fn(id === "__last" ? "last" : id ? { id, name } : null);
   }
 
   // ---------- account page: your profile and boards ----------
@@ -1546,10 +1615,10 @@
     const p = boxPin;
     if (!p) return;
     if (a === "close") closeBox();
-    else if (a === "save") saved.has(p.id) ? unsavePin(p) : savePin(p, lastBoard());
+    else if (a === "save") saved.has(p.id) ? unsavePin(p) : savePin(p, quickBoard());
     else if (a === "zoom") openLightbox(p);
     else if (a === "panel") togglePanel();
-    else if (a === "board") openBoardPicker(p, btn);
+    else if (a === "board") openBoardPicker(btn, (b) => savePin(p, b), p);
     else if (a === "share") copyLink(p);
     else if (a === "download") download(p);
     else if (a === "visit") window.open(p.link, "_blank", "noopener,noreferrer");
