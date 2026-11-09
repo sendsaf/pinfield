@@ -90,23 +90,55 @@
 
     remaining() { return this.items.length - this.next; }
     waiting() { return this.spots - this.fill.size; }
-    // The pin a spot shows. A waiting spot takes the next arrived pin only once it is on (or about to come on)
-    // screen, so new pins land where you're looking, not in spots made earlier off screen. Once the feed has
-    // ended, a spot still waiting gets a repeat chosen away from its copies. -1 = still waiting.
-    at(i, c, y, onScreen) {
-      if (i >= 0) return i;
-      let f = this.fill.get(i);
-      if (f !== undefined) return f;
-      if (!onScreen) return -1;
-      if (this.next < this.items.length) f = this.next++;
-      else if (!this.open) f = this.repeatFor(c, Math.floor(y / 300), y);
-      else return -1;
-      this.fill.set(i, f);
-      return f;
+    // Waiting spots that came on screen get their pins together: of the next pins in the queue, each spot takes
+    // the one whose shape fits its box best (closest pair first), so wide pictures go to wide boxes. Only spots on
+    // (or about to come on) screen take pins, so new pins land where you're looking. Once the feed has ended, a
+    // spot still waiting gets a repeat chosen away from its copies. need: [{ o, t, c }] (out entry, column entry).
+    fillSpots(need) {
+      const k = Math.min(need.length, this.items.length - this.next);
+      const at = new Array(need.length).fill(-1);
+      if (k > 0) {
+        const a = this.next, pool = this.items.slice(a, Math.min(this.items.length, a + k + 12));
+        const ph = pool.map((_, m) => this.imgH(a + m));
+        const usedP = new Uint8Array(pool.length), usedS = new Uint8Array(need.length);
+        const pick = new Array(need.length).fill(-1);
+        for (let n = 0; n < k; n++) {
+          let bs = -1, bp = -1, bd = Infinity;
+          for (let s = 0; s < need.length; s++) {
+            if (usedS[s]) continue;
+            for (let m = 0; m < pool.length; m++) {
+              if (usedP[m]) continue;
+              const d = Math.abs(Math.log(ph[m] / need[s].t.h));
+              if (d < bd) { bd = d; bs = s; bp = m; }
+            }
+          }
+          usedS[bs] = 1; usedP[bp] = 1; pick[bs] = bp;
+        }
+        // the chosen pins move to the front of the queue (in spot order), the rest keep their order behind them
+        const chosen = [], order = [];
+        for (let s = 0; s < need.length; s++) if (pick[s] >= 0) { order.push(s); chosen.push(pool[pick[s]]); }
+        const rest = pool.filter((_, m) => !usedP[m]);
+        const seg = chosen.concat(rest);
+        for (let m = 0; m < seg.length; m++) this.items[a + m] = seg[m];
+        order.forEach((s, n) => { at[s] = a + n; });
+        this.next += chosen.length;
+      }
+      for (let s = 0; s < need.length; s++) {
+        const { o, t, c } = need[s];
+        let f = at[s];
+        if (f < 0 && !this.open && this.items.length) f = this.repeatFor(c, Math.floor(t.y / 300), t.y);
+        if (f < 0) continue;
+        this.fill.set(t.i, f);
+        o.i = f;
+        o.item = this.items[f];
+      }
     }
 
     imgH(i) {
-      const p = this.items[i];
+      // a spot still waiting for its pin borrows the shape of a pin already here, so the field keeps the feed's
+      // real mix of tall, square and wide boxes (it used to make every waiting spot portrait)
+      const n = this.items.length;
+      const p = i >= 0 ? this.items[i] : n ? this.items[Math.floor(hash(i, 7, this.salt) * n)] : null;
       const ratio = p && p.w > 0 && p.h > 0 ? p.h / p.w : 1.25 + hash(i, 7, this.salt) * 0.4;
       return Math.round(W * Math.min(2.6, Math.max(0.45, ratio)));
     }
@@ -215,6 +247,7 @@
     query(rect, view, out) {
       out.length = 0;
       this.view = view;
+      const need = [];
       const c0 = Math.floor((rect.x0 + W / 2) / COL), c1 = Math.ceil((rect.x1 - W / 2) / COL) + 1;
       let maxSeen = 0;
       for (let c = c0; c <= c1; c++) {
@@ -233,11 +266,14 @@
             const t = list[k];
             if (asc ? t.y > rect.y1 : t.y + t.h < rect.y0) break;
             if (t.i > maxSeen) maxSeen = t.i; // waiting spots are negative and don't count
-            const j = t.i >= 0 ? t.i : this.at(t.i, c, t.y, c * COL + W / 2 > view.x0 && c * COL - W / 2 < view.x1 && t.y + t.h > view.y0 && t.y < view.y1);
-            out.push({ key: c + "," + t.r, c, x: c * COL, y: t.y, w: W, h: t.h, i: j < 0 ? t.i : j, item: j < 0 ? WAIT : this.items[j] });
+            const j = this.real(t.i);
+            const o = { key: c + "," + t.r, c, x: c * COL, y: t.y, w: W, h: t.h, i: j < 0 ? t.i : j, item: j < 0 ? WAIT : this.items[j] };
+            out.push(o);
+            if (j < 0 && c * COL + W / 2 > view.x0 && c * COL - W / 2 < view.x1 && t.y + t.h > view.y0 && t.y < view.y1) need.push({ o, t, c });
           }
         }
       }
+      if (need.length) this.fillSpots(need);
       return maxSeen;
     }
 

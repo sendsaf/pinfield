@@ -175,6 +175,12 @@
       this._pump();
     }
 
+    // select mode: re-mark the tiles on screen after the selection changed (new tiles ask cb.isSelected)
+    markSelected() {
+      const is = this.cb.isSelected;
+      for (const e of this.live.values()) e.el.toggleAttribute("data-sel", !!is && !e.item.pending && is(e.item.id));
+    }
+
     rehover() {
       if (this.hovered && this.cb.onHover) this.cb.onHover(this.hovered.item, this.hovered.tile);
     }
@@ -414,10 +420,12 @@
         const dots = document.createElement("span");
         dots.className = "dots";
         dots.innerHTML = "<i></i><i></i><i></i>";
-        ph.append(img, dots);
+        const ck = document.createElement("span"); // select mode: the tick in the corner
+        ck.className = "ck";
+        ph.append(img, dots, ck);
         el.append(ph);
         e = { el, ph, img };
-        img.addEventListener("load", () => { img.classList.add("in"); el.removeAttribute("data-ld"); this._done(e); });
+        img.addEventListener("load", () => { img.classList.add("in"); el.removeAttribute("data-ld"); this._fitLoaded(e); this._done(e); });
         img.addEventListener("error", () => {
           el.removeAttribute("data-ld");
           this._done(e);
@@ -438,7 +446,10 @@
       // Measured: one shared layer had to re-raster as you panned and dropped twice as many frames zoomed out.
       el.style.cssText = `transform:translate3d(${Math.round(t.x - t.w / 2)}px,${Math.round(t.y)}px,0);width:${t.w}px;height:${t.h}px`;
       e.ph.style.background = p.color || "var(--ph)";
+      const pr = p.w > 0 && p.h > 0 ? p.h / p.w : 0;
+      el.toggleAttribute("data-fit", pr > 0 && t.h > t.w * pr * 1.12); // box much taller than the picture: show it whole
       el.toggleAttribute("data-seed", t.key === this.pivotKey);
+      el.toggleAttribute("data-sel", !!(this.cb.isSelected && this.cb.isSelected(p.id)));
       if (this.rise) {
         el.classList.add("rise");
         el.style.setProperty("--d", Math.min(this.riseN++ * 16, 520) + "ms");
@@ -452,6 +463,15 @@
       return e;
     }
 
+    // The picture is in, so its real shape is known. A pin that came without a size got a guessed box (portrait);
+    // if the picture is wider than the box, show it whole. Its size is kept, so its later places are the right shape.
+    _fitLoaded(e) {
+      const im = e.img, p = e.item;
+      if (!p || p.pending || !im.naturalWidth || !im.naturalHeight) return;
+      if (!(p.w > 0 && p.h > 0)) { p.w = im.naturalWidth; p.h = im.naturalHeight; }
+      e.el.toggleAttribute("data-fit", e.tile.h > e.tile.w * (im.naturalHeight / im.naturalWidth) * 1.12);
+    }
+
     // a spot whose pin hasn't arrived: an empty tile in the placeholder colour, nothing to load or click
     _waitTile(e, t) {
       e.variant = -1; e.token = (e.token || 0) + 1;
@@ -462,6 +482,8 @@
       el.setAttribute("aria-label", "Loading pin");
       el.style.cssText = `transform:translate3d(${Math.round(t.x - t.w / 2)}px,${Math.round(t.y)}px,0);width:${t.w}px;height:${t.h}px`;
       e.ph.style.background = "var(--ph)";
+      el.removeAttribute("data-sel");
+      el.removeAttribute("data-fit");
       el.classList.remove("rise");
       e.img.classList.remove("in");
       el.toggleAttribute("data-ld", !!t.central);

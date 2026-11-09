@@ -6,8 +6,11 @@ Everything here is one-time setup, then the same three commands for each new ver
 
 1. Raise `version` in `manifest.json` (stores refuse a number they've already seen): `1.0.0` -> `1.0.1`.
 2. Run `./build.sh`. It writes:
-   - `dist/pinfield-<version>-store.zip`: upload this one to the stores
-   - `dist/pinfield-<version>.zip`: same extension with the Pinterest-logo icon, for your own browsers
+   - `dist/pinfield-<version>-store.zip`: upload this one to the Chrome Web Store (and Edge)
+   - `dist/pinfield-<version>-firefox-store.zip`: upload this one to Firefox Add-ons
+   - `dist/pinfield-<version>.zip` and `-firefox.zip`: the same with the Pinterest-logo icon, for your own browsers
+   The Firefox zips differ only in the manifest's `background` key (Firefox runs `scripts`, Chrome a
+   `service_worker` and warns about `scripts`).
 3. Optional check: `npx web-ext lint --source-dir . --ignore-files "dist/**" "tools/**" "icons/logo/**" "icons/pin/**" "*.md" "build.sh"`
    should report 0 errors. The innerHTML warnings are expected (every value is escaped).
 
@@ -39,8 +42,8 @@ The Chrome Web Store asks for a public URL. Any public page works:
 
 ## 4. Firefox Add-ons
 
-1. https://addons.mozilla.org/developers/addon/submit/distribution -> **On this site** -> upload the same
-   store zip.
+1. https://addons.mozilla.org/developers/addon/submit/distribution -> **On this site** -> upload
+   `dist/pinfield-<version>-firefox-store.zip`.
 2. It asks whether you used a build tool or minifier: answer **No** (the zip is the source).
 3. Copy the listing from `store/LISTING.md`, paste the reviewer notes into "Notes for reviewers".
    Upload icon and screenshots. Submit.
@@ -49,10 +52,14 @@ The Chrome Web Store asks for a public URL. Any public page works:
 
 ## 5. Updates
 
-Raise the version, `./build.sh`, then upload the new store zip to each store (Chrome: item -> Package ->
+Raise the version, `./build.sh`, then upload the new store zips (Chrome: `-store.zip`, Firefox: `-firefox-store.zip`) (Chrome: item -> Package ->
 Upload new package; Firefox: Manage -> Upload new version). Installed copies update themselves.
 
 ## Things to know
+
+- 1.1.0 adds the `downloads` permission (Select > Download). Its justification is in `store/LISTING.md`.
+  Chrome shows "Manage your downloads" and pauses the update on installed copies until each user accepts
+  it; Firefox asks the same on update. Expect a fresh review on both stores.
 
 - Pinterest's page changes from time to time. When Pinfield stops finding pins, the fix is almost always
   in `src/extract.js` or `src/hook.js`.

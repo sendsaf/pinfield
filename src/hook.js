@@ -363,6 +363,15 @@
       };
     },
     // no board_id: Pinterest files it under your profile (Quick Saves)
+    // a new board, as Pinterest's own "Create board" sends it
+    async createBoard({ name, secret }) {
+      name = typeof name === "string" ? name.trim() : "";
+      if (!name || name.length > 100) throw new Error("bad name");
+      const options = { name, description: "", category: "other", privacy: secret ? "secret" : "public", layout: "default", collab_board_email: false, collaborator_invites_enabled: true };
+      const { data } = await resource("BoardResource", "create", options, "/");
+      if (!data || !data.id) throw new Error("Pinterest didn't create the board");
+      return boardOf(data);
+    },
     async save({ pinId, boardId }) {
       if (!digits(pinId) || (boardId != null && !digits(boardId))) throw new Error("bad id");
       const options = { pin_id: pinId };
@@ -390,6 +399,13 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       return true;
+    },
+    // select mode: does this size exist? (some pins have no "originals"; i.pinimg.com answers 403 for those)
+    // asked from here because i.pinimg.com only lets pinterest.com read its answers
+    async probe({ url }) {
+      if (typeof url !== "string" || !/^https:\/\/i\.pinimg\.com\//.test(url)) throw new Error("bad url");
+      const r = await nativeFetch.call(window, url, { method: "HEAD", credentials: "omit" });
+      return r.ok;
     },
   };
   document.addEventListener("pf:api", async (e) => {

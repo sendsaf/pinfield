@@ -76,11 +76,18 @@
     const fresh = [];
     for (const p of pins) {
       const old = seen.get(p.id);
-      if (old) { if (!old.video && p.video) old.video = p.video; if (!old.link && p.link) old.link = p.link; }
+      if (old) {
+        if (!old.video && p.video) old.video = p.video;
+        if (!old.link && p.link) old.link = p.link;
+        if (!(old.w > 0 && old.h > 0) && p.w > 0 && p.h > 0) { old.w = p.w; old.h = p.h; } // a later copy knows its size
+      }
       else seen.set(p.id, p);
       // the same picture is often saved as several pins: show it once
       const sig = sigOf(p);
       if (hidden.has(p.id) || r.ids.has(p.id) || r.sigs.has(sig)) continue;
+      // no size from Pinterest: measure it before it gets a box, or a wide picture lands in a guessed tall one
+      const q = old || p;
+      if (!(q.w > 0 && q.h > 0) && !q.sized) { sizeThen(q, key); continue; }
       r.ids.add(p.id);
       r.sigs.add(sig);
       r.pins.push(old || p);
@@ -94,6 +101,45 @@
       if (key === cur && field) field.refresh();
     }
     if (key === cur) maybeBoot();
+  }
+
+  // Pins Pinterest sent without a size wait here while their smallest picture (236px, the one the field shows
+  // first anyway, so it's then in the cache) loads far enough to tell its width and height. Then they join their
+  // route like any pin. A few at a time; one that can't be measured in 4s goes in with a guessed shape.
+  const sizing = new Map(); // pin id -> routes waiting for it
+  const sizeQ = [];
+  let sizeN = 0;
+  function sizeThen(p, key) {
+    const keys = sizing.get(p.id);
+    if (keys) { keys.add(key); return; }
+    sizing.set(p.id, new Set([key]));
+    sizeQ.push(p);
+    sizeNext();
+  }
+  function sizeNext() {
+    while (sizeN < 6 && sizeQ.length) {
+      const p = sizeQ.shift(), im = new Image();
+      sizeN++;
+      let done = false, poll = 0;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearInterval(poll); clearTimeout(t);
+        if (im.naturalWidth > 0 && im.naturalHeight > 0) { p.w = im.naturalWidth; p.h = im.naturalHeight; }
+        p.sized = true; // measured, or given up on: don't ask again
+        im.removeAttribute("src");
+        sizeN--;
+        const keys = sizing.get(p.id) || [];
+        sizing.delete(p.id);
+        for (const k of keys) ingest([p], k);
+        sizeNext();
+      };
+      const t = setTimeout(finish, 4000);
+      im.onload = im.onerror = finish;
+      // the size is known once the header is in, long before the whole picture is
+      poll = setInterval(() => { if (im.naturalWidth > 0) finish(); }, 40);
+      im.src = p.src.s || p.src.m || p.src.l;
+    }
   }
 
   const idle = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 800 }) : setTimeout(fn, 50));
@@ -209,6 +255,10 @@
     hide: svg("M2.8 4.2 4.2 2.8l17 17-1.4 1.4-3.2-3.2A11 11 0 0 1 12 19C6.5 19 2.6 15 1 12c.8-1.5 2-3.2 3.7-4.6zM12 5c5.5 0 9.4 4 11 7a13 13 0 0 1-3.1 3.8L16.9 13A5 5 0 0 0 11 7.1L9 5.2A12 12 0 0 1 12 5m-3.7 6.1a4 4 0 0 0 4.6 4.6z"),
     close: svg("m15.18 12 7.16-7.16-3.18-3.18L12 8.82 4.84 1.66 1.66 4.84 8.82 12l-7.16 7.16 3.18 3.18L12 15.18l7.16 7.16 3.18-3.18z"),
     chev: svg("M12 15.5 5.5 9l1.4-1.4 5.1 5.1 5.1-5.1L18.5 9z"),
+    chevR: svg("M15.5 12 9 18.5l-1.4-1.4 5.1-5.1-5.1-5.1L9 5.5z"),
+    chevL: svg("M8.5 12 15 5.5l1.4 1.4-5.1 5.1 5.1 5.1-1.4 1.4z"),
+    // select: a tick inside a dashed circle (strokes, so it can't use the filled-path helper)
+    select: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-dasharray:3.1 2.5"/><path d="M7.9 12.4l2.8 2.8 5.5-5.6" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/></svg>`,
     pin: svg("M17 3H7v2h1v5.4L5 13v2h6v6l1 1 1-1v-6h6v-2l-3-2.6V5h1z"),
     check: svg("M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"),
     expand: svg("M4 4h6v2H7.4l3.3 3.3-1.4 1.4L6 7.4V10H4zm10 0h6v6h-2V7.4l-3.3 3.3-1.4-1.4L16.6 6H14zM4 14h2v2.6l3.3-3.3 1.4 1.4L7.4 18H10v2H4zm14 2.6V14h2v6h-6v-2h2.6l-3.3-3.3 1.4-1.4z"),
@@ -219,6 +269,9 @@
   // ---------- overlay ----------
   let host = null, field = null, ui = {};
   let bootTimer = 0, keyGuard = false, boxPin = null;
+  // select mode: picked pins in the order you picked them; selNote is a passing message in the pill ("Saving 3")
+  let selecting = false, selNote = null, selT = 0;
+  const selected = new Map();
   const isOn = () => lsGet(LS.on, "1") !== "0";
 
   const STYLE = `
@@ -248,6 +301,11 @@
   .ph img,.ph .vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0}
   .ph img{opacity:0;transition:opacity .2s ease}
   .ph img.in{opacity:1}
+  /* while the field moves, pictures that arrive just appear: a fade on each one made the browser redo frame
+     work for every tile at once (measured: about a third of the dropped frames when panning zoomed out) */
+  .layer.mv .ph img,.layer.mv .ph .vid{transition:none}
+  /* a box taller than its picture (a wide pin that landed in a tall spot): the whole picture, on its own colour */
+  .t[data-fit] .ph img,.t[data-fit] .ph .vid{object-fit:contain;object-position:50% 50%}
   .ph .vid{opacity:0;transition:opacity .25s;pointer-events:none}
   .ph .vid.on{opacity:1}
   .stage[data-ql="2"] .ph img,.stage[data-ql="2"] .t{transition:none}
@@ -264,32 +322,22 @@
   .qa-top{justify-content:flex-end}
   .qa-bot{justify-content:flex-end}
   .qa-bot .grow{flex:1}
-  .q{height:36px;min-width:36px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:999px;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(12px) saturate(1.8);backdrop-filter:blur(12px) saturate(1.8);color:#111;cursor:pointer;font-weight:600;font-size:14px;padding:0 10px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .5px rgba(255,255,255,.4),0 2px 10px rgba(0,0,0,.12);transition:scale .2s cubic-bezier(.2,.8,.2,1),background .15s}
-  .q:hover{background:rgba(255,255,255,.85)}
+  .q{height:36px;min-width:36px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border-radius:999px;background:#fff;color:#111;cursor:pointer;font-weight:600;font-size:14px;padding:0 10px;
+    box-shadow:0 2px 10px rgba(0,0,0,.16);transition:scale .2s cubic-bezier(.2,.8,.2,1),background .15s}
+  .q:hover{background:#ececec}
   .q:active{scale:1.1}
-  .stage[data-ql="2"] .q{-webkit-backdrop-filter:none;backdrop-filter:none}
-  .stage[data-ql="2"] .q:not(.save):not(.board){background:rgba(255,255,255,.92)}
   .q svg{width:16px;height:16px}
   .q.ic{width:36px;padding:0}
   .q.save{background:#e60023;color:#fff;padding:0 14px;font-size:15px}
   .q.save:hover{background:#ad081b}
   .q.save[data-done]{background:#111}
-  .q.board{max-width:130px;background:rgba(0,0,0,.32);color:#fff;font-weight:600;margin-right:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 10px rgba(0,0,0,.12)}
-  .q.board:hover{background:rgba(0,0,0,.48)}
+  .q.board{max-width:130px;background:#111;color:#fff;font-weight:600;margin-right:auto;box-shadow:0 2px 10px rgba(0,0,0,.16)}
+  .q.board:hover{background:#333}
   .q.board span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
   .q[hidden]{display:none}
   .stage[data-lite] .qa{display:none}
-  /* Liquid Glass (iOS 26/27): floating capsules of frosted glass with a bright rim, a darker lens behind
-     the selected tab, and a dock that shrinks while you move. */
-  .glass{position:relative;background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 -1px 0 var(--rim-lo),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 8px 28px var(--shade)}
-  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-    background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 42%,rgba(255,255,255,0) 72%,rgba(255,255,255,.1));mix-blend-mode:soft-light}
-  .root[data-ql="2"] .glass,.root[data-ql="2"] .pop,.root[data-ql="2"] .sugg{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-2)}
-  /* a long pan: the glass turns to frosted solid, so the GPU doesn't re-blur the moving field under it every frame */
-  .glass{transition:background .2s}
-  .root[data-moving] .glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-2);transition:background .2s .25s,backdrop-filter 0s .25s,scale .35s cubic-bezier(.2,.8,.2,1) .25s}
+  /* bars, pills and popovers: solid surfaces with a fine edge and a soft shadow */
+  .glass{position:relative;background:var(--chrome);color:var(--fg);box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 6px 22px var(--shade)}
   .dock{position:absolute;bottom:18px;left:50%;translate:-50% 0;z-index:9;display:flex;align-items:center;transform-origin:50% 100%;
     transition:scale .35s cubic-bezier(.2,.8,.2,1),translate .35s cubic-bezier(.2,.8,.2,1)}
   .root[data-moving] .dock{scale:.86;translate:-50% 8px;transition-delay:.25s}
@@ -313,8 +361,8 @@
   .ib[hidden]{display:none}
   .ib:focus-visible,.sw:focus-visible,.btn:focus-visible,.mi:focus-visible,.seg button:focus-visible,.bd:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   /* popovers */
-  .pop{position:absolute;z-index:11;border-radius:24px;background:var(--glass-2);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);color:var(--fg);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 14px 40px var(--shade);padding:10px;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
+  .pop{position:absolute;z-index:11;border-radius:24px;background:var(--chrome);color:var(--fg);
+    box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 14px 40px var(--shade);padding:10px;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
   @keyframes pop{from{opacity:0;scale:.9;translate:0 10px}}
   .pop[hidden]{display:none}
   .pop h3{margin:6px 8px 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
@@ -326,6 +374,11 @@
   .seg{display:flex;gap:4px;padding:4px 8px 8px}
   .seg button{flex:1;height:34px;border:0;border-radius:17px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:0 12px}
   .seg button[aria-pressed="true"]{background:var(--fg);color:var(--chrome)}
+  .qsb{display:flex;align-items:center;justify-content:space-between;gap:8px;width:calc(100% - 16px);height:40px;margin:4px 8px 8px;border:0;border-radius:20px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:14px;padding:0 10px 0 16px;cursor:pointer}
+  .qsb:hover{background:var(--btn-h)}
+  .qsb span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .qsb svg{width:18px;height:18px}
+  .qsb:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   .mi{display:flex;align-items:center;gap:12px;width:100%;height:44px;border:0;border-radius:10px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;padding:0 12px;text-align:left}
   .mi{transition:background .15s}
   .mi:hover{background:var(--press)}
@@ -334,6 +387,25 @@
   .bp input{height:44px;border:0;border-radius:22px;background:var(--press);color:var(--fg);font:inherit;font-size:15px;padding:0 16px;margin:2px 0 10px;outline:none;flex:none;transition:background .2s,box-shadow .2s}
   .bp input:focus{background:var(--lens);box-shadow:0 0 0 2px rgba(0,116,232,.5)}
   .bp h3{margin:4px 8px 6px;font-size:12px;font-weight:600;color:var(--muted)}
+  .bp-new{display:flex;align-items:center;gap:12px;flex:none;margin-top:6px;padding:10px 12px;border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;text-align:left}
+  .bp-new:hover{background:var(--press)}
+  .bp-new svg{width:20px;height:20px;padding:12px;box-sizing:content-box;border-radius:10px;background:var(--btn)}
+  .bp-new span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .bp-new:focus-visible{outline:3px solid #0074e8;outline-offset:-3px}
+  .bp-form{gap:6px;padding:10px 12px 12px}
+  .bp-form h3{margin:2px 0 8px;font-size:16px;color:var(--fg)}
+  .bp-lbl{font-size:12px;font-weight:600;color:var(--muted)}
+  .bp-form input[type=text]{height:44px;border:0;border-radius:14px;background:var(--press);color:var(--fg);font:inherit;font-size:15px;padding:0 14px;margin:0 0 6px;outline:none}
+  .bp-form input[type=text]:focus{background:var(--lens);box-shadow:0 0 0 2px rgba(0,116,232,.5)}
+  .bp-sw{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;font-size:15px;font-weight:600;cursor:pointer;padding:6px 0}
+  .bp-sw input{width:20px;height:20px;margin:0;accent-color:#e60023}
+  .bp-sw small{grid-column:2;font-size:12px;font-weight:400;color:var(--muted)}
+  .bp-err{margin:0;color:#e60023;font-size:13px}
+  .bp-err[hidden]{display:none}
+  .bp-row{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+  .btn.pri{background:#e60023;color:#fff}
+  .btn.pri:hover{background:#c8001f}
+  .btn[disabled]{opacity:.6;cursor:default}
   .bp .list{overflow:auto;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
   .bd{display:flex;align-items:center;gap:12px;border:0;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;padding:6px;border-radius:10px;cursor:pointer;text-align:left}
   .bd{transition:background .15s,scale .15s}
@@ -401,30 +473,42 @@
   .exf{display:flex;justify-content:center}
   .story:focus-visible i,.topic:focus-visible i,.fb:focus-visible .col,.fp:focus-visible{outline:3px solid #0074e8;outline-offset:2px}
   /* pin view */
-  /* an open pin: a big card in the grid with its button rail beside it; the cards around it stay faded until
-     you move the field */
   /* enlarge: the pin full size over everything; click anywhere or Esc to close */
   .box{position:absolute;inset:0;z-index:13;display:flex;align-items:center;justify-content:center;padding:28px;background:rgba(12,12,12,.9);cursor:zoom-out;animation:fadeIn .2s ease both}
   .box[hidden]{display:none}
   @keyframes fadeIn{from{opacity:0}}
   .box img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px}
-  .box .ib{position:absolute;top:18px;right:18px;color:#fff;background:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
-  .box .ib:hover{background:rgba(255,255,255,.26)}
+  .box .ib{position:absolute;top:18px;right:18px;color:#fff;background:#2e2e2e;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .box .ib:hover{background:#3d3d3d}
   .hero{position:absolute;left:0;top:0;z-index:4}
-  .hero .card{position:relative;width:100%;height:100%;border-radius:28px;overflow:hidden;background:var(--ph);box-shadow:0 10px 32px var(--shade),0 0 0 .5px var(--edge)}
-  /* enlarge sits in the corner, only while you're over the pin */
-  .hero .zoom{position:absolute;top:14px;right:14px;opacity:0;scale:.9;transition:opacity .18s ease,scale .18s ease}
-  .hero .card:hover .zoom,.hero .zoom:focus-visible{opacity:1;scale:1}
-  .hero .media{position:relative;width:100%;height:100%;display:block;overflow:hidden}
+  /* the open pin is a Polaroid: one solid card, the picture inset in it and a strip on the right that holds the
+     buttons (Save on top, the rest in the middle, the details toggle at the bottom). Details widen the strip by
+     one grid column for the title and source. */
+  .hero .card{position:relative;display:flex;width:100%;height:100%;padding:8px 0 8px 8px;border-radius:28px;background:var(--chrome);color:var(--fg);box-shadow:0 10px 32px var(--shade),0 0 0 .5px var(--edge),0 0 0 1px var(--line)}
+  .hero .media{position:relative;flex:none;height:100%;display:block;overflow:hidden;border-radius:20px;background:var(--ph)}
   .hero .media img,.hero .media video{position:relative;display:block;width:100%;height:100%;object-fit:contain}
   .hero .media img.bg{position:absolute;inset:0;object-fit:cover;filter:blur(36px) saturate(1.15);scale:1.2;opacity:.85}
-  .acts{position:absolute;display:flex;flex-direction:column;gap:10px;align-items:center}
-  /* where a save went: slides out beside the pin button, then goes */
-  .acts .tag{position:absolute;left:calc(100% + 8px);height:36px;display:flex;align-items:center;padding:0 14px;border-radius:18px;white-space:nowrap;font-weight:600;font-size:14px;color:var(--fg);
+  /* enlarge sits in the picture's corner, only while you're over the pin */
+  .hero .zoom{position:absolute;top:12px;right:12px;opacity:0;scale:.9;transition:opacity .18s ease,scale .18s ease}
+  .hero .card:hover .zoom,.hero .zoom:focus-visible{opacity:1;scale:1}
+  .acts{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:0 8px}
+  .acts .st{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .acts .ib svg{width:20px;height:20px}
+  .acts .info{display:none}
+  .card.wide .acts{align-items:stretch;padding:4px 16px 0 18px}
+  .card.wide .acts .st{flex-direction:row;flex-wrap:wrap;align-items:center}
+  .card.wide .acts .mid{flex:1;flex-direction:column;align-items:stretch;justify-content:center;gap:14px}
+  .card.wide .acts .info{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .card.wide .acts .row{display:flex;flex-wrap:wrap;gap:2px;margin-left:-6px}
+  .info h2{margin:0;font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+  .info .src{align-self:flex-start;max-width:100%;border:0;padding:0;background:none;color:var(--fg);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .info .src:hover{color:var(--muted)}
+  .info .src:focus-visible{outline:3px solid #0074e8;outline-offset:2px}
+  .info small{color:var(--muted);font-size:13px}
+  /* where a save went: slides out to the right of the card, then goes */
+  .acts .tag{position:absolute;left:calc(100% + 10px);height:36px;display:flex;align-items:center;padding:0 14px;border-radius:18px;white-space:nowrap;font-weight:600;font-size:14px;color:var(--fg);
     opacity:0;translate:-6px 0;pointer-events:none;transition:opacity .2s ease,translate .3s cubic-bezier(.2,.8,.2,1)}
   .acts .tag.on{opacity:1;translate:0 0}
-  .acts .grp{flex-direction:column;gap:4px;padding:5px}
-  .acts .ib svg{width:20px;height:20px}
   .ib.save{background:#e60023;color:#fff}
   .ib.save:hover{background:#c8001f}
   .ib.save:active{background:#ad081b}
@@ -432,8 +516,8 @@
   .ib.save[data-done]:hover{background:var(--muted)}
   .stage[data-focus] .t{opacity:.16}
   .stage[data-focus] .qa{display:none}
-  .toast{position:absolute;left:50%;bottom:96px;translate:-50% 0;z-index:12;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:rgba(20,20,20,.72);-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);color:#fff;font-weight:600;font-size:14px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 8px 28px rgba(0,0,0,.25);animation:toast .3s cubic-bezier(.2,.8,.2,1) both}
+  .toast{position:absolute;left:50%;bottom:96px;translate:-50% 0;z-index:12;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:#1c1c1c;color:#fff;font-weight:600;font-size:14px;
+    box-shadow:0 8px 28px rgba(0,0,0,.25);animation:toast .3s cubic-bezier(.2,.8,.2,1) both}
   .toast[hidden]{display:none}
   .toast i{width:28px;height:28px;border-radius:8px;background:#333 center/cover}
   @keyframes toast{from{opacity:0;translate:-50% 8px}}
@@ -448,8 +532,8 @@
   .btn{height:44px;padding:0 18px;border:0;border-radius:999px;background:var(--btn);color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer}
   .btn:hover{background:var(--btn-h)}
   /* search suggestions: opens upward from the dock's search box, like a normal search */
-  .sugg{position:absolute;z-index:11;width:min(520px,80vw);max-height:min(460px,60vh);overflow:auto;border-radius:26px;background:var(--glass-2);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);color:var(--fg);
-    box-shadow:inset 0 1px 0 var(--rim),inset 0 0 0 .5px var(--rim-lo),0 0 0 .5px var(--edge),0 14px 40px var(--shade);padding:10px;scrollbar-width:none;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
+  .sugg{position:absolute;z-index:11;width:min(520px,80vw);max-height:min(460px,60vh);overflow:auto;border-radius:26px;background:var(--chrome);color:var(--fg);
+    box-shadow:0 0 0 .5px var(--edge),0 0 0 1px var(--line),0 14px 40px var(--shade);padding:10px;scrollbar-width:none;transform-origin:50% 100%;animation:pop .28s cubic-bezier(.2,.8,.2,1) both}
   .sugg[hidden]{display:none}
   .sugg h3{margin:8px 10px 6px;font-size:12px;font-weight:600;color:var(--muted)}
   .sg{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;border:0;border-radius:12px;background:transparent;color:var(--fg);font:inherit;font-size:15px;padding:6px 10px;cursor:pointer;text-align:left}
@@ -463,7 +547,40 @@
   .chip i{width:32px;height:32px;border-radius:50%;background:var(--ph) center/cover;flex:none}
   .sg:focus-visible,.chip:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-  @media (prefers-reduced-motion:reduce){.layer.enter,.t.rise,.load i,.qa,.toast,.pop,.sugg,.card,.acts,.box,.dots i{animation:none!important}.dock,.corner,.ib,.q,.acts .tag,.hero .zoom{transition:none}.ph img,.ph .vid{transition:none}}
+  /* select: a pill left of the corner tools. It grows to "3 selected | Download | Cancel" as you pick pins;
+     its width is set from its contents so the change can animate. --cw is the corner's width. */
+  .sel{position:absolute;top:16px;right:calc(16px + var(--cw,158px) + 8px);z-index:9;display:flex;justify-content:flex-end;overflow:hidden;transform-origin:100% 0;
+    transition:width .32s cubic-bezier(.2,.8,.2,1),scale .35s cubic-bezier(.2,.8,.2,1),translate .35s cubic-bezier(.2,.8,.2,1),background .2s}
+  /* follows the corner as it shrinks while you move */
+  .root[data-moving] .sel{scale:.86;translate:calc(var(--cw,158px) * .14) 0;transition-delay:.25s}
+  .boards:not([hidden]) ~ .sel{display:none}
+  .sel .in{display:flex;align-items:center;gap:2px;flex:none;white-space:nowrap}
+  .sb{height:48px;display:inline-flex;align-items:center;gap:6px;padding:0 18px;border:0;border-radius:24px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;
+    transition:scale .25s cubic-bezier(.2,.8,.2,1),background .2s}
+  .sb svg{width:18px;height:18px}
+  .sb.ic{width:48px;padding:0;justify-content:center}
+  .sb.ic svg{width:24px;height:24px}
+  .sb:hover{background:var(--press)}
+  .sb:active{scale:1.08;background:var(--lens)}
+  .sb:focus-visible{outline:3px solid #0074e8;outline-offset:1px}
+  .sb.dl{background:#e60023;color:#fff}
+  .sb.dl:hover{background:#c8001f}
+  .sb.dl:active{background:#ad081b}
+  .sb[disabled]{cursor:default;opacity:.6}
+  .sel .lbl{display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 10px 0 16px;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
+  .sel .lbl svg{width:18px;height:18px}
+  .sel .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  @media (max-width:560px){.sel{top:76px;right:16px}.root[data-moving] .sel{translate:0 0}}
+  /* select mode: a ring and a tick on each picked pin; the hover buttons step aside */
+  .stage[data-select] .qa{display:none}
+  .stage[data-select]{cursor:default}
+  .ck{position:absolute;top:10px;right:10px;z-index:4;width:28px;height:28px;border-radius:50%;display:none;pointer-events:none;
+    background:rgba(255,255,255,.7);box-shadow:inset 0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.25);transition:background .15s,scale .2s cubic-bezier(.2,.8,.2,1)}
+  .stage[data-select] .t[href] .ck{display:block}
+  .t[data-sel] .ck{display:block;background:#e60023;scale:1.08}
+  .t[data-sel] .ck::after{content:"";position:absolute;left:10px;top:6px;width:6px;height:12px;border:solid #fff;border-width:0 2.5px 2.5px 0;rotate:45deg}
+  .t[data-sel] .ph::after{content:"";position:absolute;inset:0;z-index:4;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 4px #e60023,inset 0 0 0 6px rgba(255,255,255,.85)}
+  @media (prefers-reduced-motion:reduce){.layer.enter,.t.rise,.load i,.qa,.toast,.pop,.sugg,.card,.acts,.box,.dots i{animation:none!important}.dock,.corner,.ib,.q,.acts .tag,.hero .zoom,.sel,.sb,.ck{transition:none}.ph img,.ph .vid{transition:none}}
   `;
 
   const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -507,7 +624,8 @@
         <button data-qm="auto" aria-pressed="false" title="Adjusts to your computer">Auto</button>
         <button data-qm="smooth" aria-pressed="false" title="Lightest: for slower computers">Smooth</button>
         <button data-qm="sharp" aria-pressed="false" title="Sharpest images and video">Sharp</button>
-      </div>`);
+      </div>
+      ${canSave() ? `<h3>Quick save goes to</h3><button class="qsb" data-a="quick-board" aria-haspopup="listbox" title="The board the red Save button on a pin saves to"><span></span>${I.chev}</button>` : ""}`);
     tune.hidden = true;
     tune.setAttribute("role", "dialog");
     tune.setAttribute("aria-label", "Look and speed");
@@ -550,8 +668,12 @@
         <span class="q ic" data-q="more" role="button" title="More" aria-label="More">${I.more}</span>
       </span>`);
 
-    root.append(load, note, boards, box, dock, corner, tune, menu, sugg, toast);
-    ui = { root, dock, corner, tune, menu, boards, load, note, box, sugg, toast, qa };
+    const sel = el("div", "glass grp sel", `<span class="in"></span>`);
+    sel.setAttribute("role", "toolbar");
+    sel.setAttribute("aria-label", "Select pins");
+
+    root.append(load, note, boards, box, dock, corner, sel, tune, menu, sugg, toast);
+    ui = { root, dock, corner, sel, tune, menu, boards, load, note, box, sugg, toast, qa };
     applyBg(getBg());
 
     const input = dock.querySelector("input");
@@ -579,7 +701,7 @@
         addEventListener(t, (e) => {
           if (!host) return;
           const path = e.composedPath();
-          if (!path.some((n) => n === ui.dock || n === ui.corner || n === ui.box || n === ui.menu || n === ui.tune || n === ui.boards || n === ui.sugg)) return;
+          if (!path.some((n) => n === ui.dock || n === ui.corner || n === ui.sel || n === ui.box || n === ui.menu || n === ui.tune || n === ui.boards || n === ui.sugg)) return;
           // stopping here also stops listeners inside our own UI, so the search box's keys are handled first
           if (t === "keydown" && path[0] === ui.dock.querySelector("input")) searchKey(e);
           e.stopPropagation();
@@ -590,8 +712,9 @@
     field = new Field(root, {
       quickEl: qa,
       onNeedMore: needMore,
-      onOpen: (pin, tile) => openBox(pin, tile),
-      onQuick: quick,
+      onOpen: (pin, tile) => (selecting ? toggleSelect(pin) : openBox(pin, tile)),
+      onQuick: (name, pin, tile, btn) => (selecting ? toggleSelect(pin) : quick(name, pin, tile, btn)),
+      isSelected: (id) => selected.has(id),
       onHover: dressQuick,
       onCamera: (c) => { const r = routes.get(cur); if (r) r.camera = { x: c.x, y: c.y, z: c.z }; },
       onMove: (m) => {
@@ -605,11 +728,14 @@
     root.insertBefore(field.stage, root.firstChild);
     field.setQuality(lsGet(LS.q, "auto"));
     markQuality();
+    dressQuickSetting();
     if (!canSave()) dock.querySelector('[data-a="boards"]').hidden = true;
     else dressAccount();
     markNav();
     renderGuides();
     document.documentElement.appendChild(host);
+    sel.style.setProperty("--cw", corner.offsetWidth + "px");
+    renderSel();
     moveLens();
     hidePage(true);
   }
@@ -617,6 +743,7 @@
   function unmount() {
     if (!host) return;
     boxPin = null; openHere = null;
+    selecting = false; selected.clear(); clearTimeout(selT); selNote = null;
     field.destroy();
     host.remove();
     host = field = null;
@@ -684,6 +811,13 @@
     else if (act === "create") { setOn(false); location.assign("/pin-creation-tool/"); }
     else if (act === "native") setOn(false);
     else if (act === "tune") togglePop(ui.tune, a);
+    else if (act === "bp-new") showCreateBoard();
+    else if (act === "bp-back") drawPicker();
+    else if (act === "quick-board") openBoardPicker(ui.corner.querySelector('[data-a="tune"]'), setQuick, "quick", { last: true });
+    else if (act === "sel-save") openBoardPicker(a, saveSelected, "sel");
+    else if (act === "sel-on") setSelecting(true);
+    else if (act === "sel-off") setSelecting(false);
+    else if (act === "sel-dl") downloadSelected();
     else if (act === "lb-close") closeLightbox();
     else if (act.startsWith("box-")) boxAction(act.slice(4), a);
     else if (act === "acct-created") { closeAll(); goTo("/" + account.username + "/_created/"); }
@@ -692,6 +826,19 @@
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast("Profile link copied"), () => toast("Couldn't copy the link"));
     }
     else if (act === "acct-native" || act === "acct-create") { setOn(false); location.assign("/" + account.username + "/"); }
+  }
+
+  function dressQuickSetting() {
+    const s = ui.tune && ui.tune.querySelector('[data-a="quick-board"] span');
+    if (!s) return;
+    const q = quickFixed(), lb = lastBoard();
+    s.textContent = q ? (q.board ? q.board.name : "Profile") : "Last board used" + (lb ? " (" + lb.name + ")" : "");
+  }
+  function setQuick(b) {
+    lsSet(LS_QUICK, b === "last" ? "null" : JSON.stringify({ board: b }));
+    dressQuickSetting();
+    if (field) field.rehover();
+    toast(b === "last" ? "Quick save follows the last board you used" : "Quick save goes to " + (b ? b.name : "Profile"));
   }
 
   function markQuality() {
@@ -889,6 +1036,11 @@
   // ---------- quick actions ----------
   let menuPin = null, menuTile = null;
   const lastBoard = () => lsJson(LS.board, null);
+  // quick save (the red Save on a pin): the board you set in Look and speed, else the last one you saved to.
+  // stored as { board: {id,name} | null } (null = your profile); nothing stored = follow the last board
+  const LS_QUICK = "pinfield:quick";
+  const quickFixed = () => { const q = lsJson(LS_QUICK, null); return q && typeof q === "object" && "board" in q ? q : null; };
+  const quickBoard = () => { const q = quickFixed(); return q ? q.board : lastBoard(); };
 
   function dressQuick(pin) {
     const qa = ui.qa;
@@ -896,7 +1048,7 @@
     const b = qa.querySelector('[data-q="board"]'), s = qa.querySelector('[data-q="save"]');
     b.hidden = s.hidden = !signed;
     if (signed) {
-      const lb = lastBoard();
+      const lb = quickBoard();
       b.querySelector("span").textContent = lb ? lb.name : "Profile";
       s.textContent = saved.has(pin.id) ? "Saved" : "Save";
       s.toggleAttribute("data-done", saved.has(pin.id));
@@ -906,8 +1058,8 @@
   }
 
   function quick(name, pin, tile, btn) {
-    if (name === "save") return saved.has(pin.id) ? unsavePin(pin) : savePin(pin, lastBoard());
-    if (name === "board") return openBoardPicker(pin, btn);
+    if (name === "save") return saved.has(pin.id) ? unsavePin(pin) : savePin(pin, quickBoard());
+    if (name === "board") return openBoardPicker(btn, (b) => savePin(pin, b), pin);
     if (name === "visit") return pin.link && window.open(pin.link, "_blank", "noopener,noreferrer");
     if (name === "share") return copyLink(pin);
     if (name === "more") {
@@ -945,6 +1097,148 @@
       .then(() => toast("Downloaded"), () => toast("Couldn't download this one"));
   }
 
+  // ---------- select mode: pick pins, then save them all into one folder ----------
+  function setSelecting(on) {
+    if (!field) return;
+    selecting = on;
+    if (!on) selected.clear();
+    clearTimeout(selT);
+    selNote = null;
+    field.stage.toggleAttribute("data-select", on);
+    field.markSelected();
+    if (on) closePops();
+    renderSel();
+  }
+
+  function toggleSelect(pin) {
+    if (selNote) return; // saving
+    const p = seen.get(pin.id) || pin;
+    if (selected.has(p.id)) selected.delete(p.id);
+    else selected.set(p.id, p);
+    field.markSelected();
+    renderSel();
+  }
+
+  function renderSel() {
+    const s = ui.sel;
+    if (!s) return;
+    const inner = s.querySelector(".in");
+    const root = s.getRootNode();
+    const hadFocus = !!root.activeElement && s.contains(root.activeElement);
+    const n = selected.size;
+    let say;
+    if (selNote) {
+      say = selNote.text;
+      inner.innerHTML = `<span class="lbl">${selNote.icon || ""}${esc(say)}</span>`;
+    } else if (!selecting) {
+      say = "";
+      inner.innerHTML = `<button class="sb ic" data-a="sel-on" title="Select pins to download" aria-label="Select pins">${I.select}</button>`;
+    } else {
+      say = n ? n + " selected" : "Click pins to select them";
+      inner.innerHTML = `<span class="lbl">${n ? n + " selected" : "Click pins to select"}</span>` +
+        (n && canSave() ? `<button class="sb dl" data-a="sel-save" title="Save the selected pins to a board" aria-haspopup="listbox">${I.pin}Save</button>` : "") +
+        (n ? `<button class="sb${canSave() ? "" : " dl"}" data-a="sel-dl" title="Download the selected pins into one folder">${I.download}Download</button>` : "") +
+        `<span class="sep" aria-hidden="true"></span><button class="sb" data-a="sel-off" title="Cancel (Esc)">Cancel</button>`;
+    }
+    // one live region that stays put, so screen readers hear each change
+    let live = s.querySelector(".sr");
+    if (!live) { live = el("span", "sr"); live.setAttribute("role", "status"); s.append(live); }
+    live.textContent = say;
+    s.style.width = inner.offsetWidth + 10 + "px"; // + the group's padding; a fixed width is what lets it animate
+    if (hadFocus) {
+      const b = inner.querySelector('[data-a="sel-save"],[data-a="sel-dl"],[data-a="sel-off"],[data-a="sel-on"]');
+      if (b) b.focus({ preventScroll: true });
+      else field && field.stage.focus({ preventScroll: true });
+    }
+  }
+
+  // the folder inside Downloads/Pinfield: the board or search you're on, and when
+  function batchFolder() {
+    const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}`;
+    const path = location.pathname, pid = pinIdOf(path);
+    let name = "";
+    if (path.startsWith("/search/")) name = new URLSearchParams(location.search).get("q") || "";
+    else if (pid) name = "pin " + pid;
+    else {
+      const m = path.match(/^\/([\w.-]+)\/([\w%.-]+)\/?$/); // /username/board/
+      if (m && m[1] !== "ideas" && !m[2].startsWith("_")) { try { name = decodeURIComponent(m[2]).replace(/-/g, " "); } catch {} }
+    }
+    return (name ? name.trim().slice(0, 60) + " " : "") + stamp;
+  }
+
+  // the largest picture there is: the original if Pinterest has one for this pin, else 736px
+  const pinimg = (u) => typeof u === "string" && /^https:\/\/i\.pinimg\.com\//.test(u);
+  async function bestUrl(p) {
+    const o = pinimg(p.src.o) ? p.src.o : null, l = pinimg(p.src.l) ? p.src.l : null;
+    if (!o || o === l) return l;
+    if (!l) return o;
+    try { return (await api("probe", { url: o })) ? o : l; } catch { return o; }
+  }
+  async function eachLimit(xs, n, fn) {
+    const out = new Array(xs.length);
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
+      while (i < xs.length) { const k = i++; out[k] = await fn(xs[k]); }
+    }));
+    return out;
+  }
+
+  // save every selected pin to one board, one at a time (Pinterest has no bulk save; a short pause between
+  // saves keeps it from looking like a bot). Pins you already saved here are skipped. Three failures in a row stop it.
+  async function saveSelected(board) {
+    const pins = [...selected.values()].filter((p) => /^\d+$/.test(p.id));
+    if (!pins.length || selNote || !canSave()) return;
+    const todo = pins.filter((p) => !saved.has(p.id)), skipped = pins.length - todo.length;
+    const where = board ? board.name : "Profile";
+    let ok = 0, failed = 0, streak = 0;
+    for (let k = 0; k < todo.length; k++) {
+      if (!selecting) break;
+      selNote = { text: `Saving ${k + 1} of ${todo.length}…` };
+      renderSel();
+      const p = todo[k];
+      try {
+        const res = await api("save", { pinId: p.id, boardId: board ? board.id : null });
+        savedMap.set(p.id, { id: res.id, board: board ? board.name : res.board || "Profile" });
+        ok++; streak = 0;
+      } catch { failed++; if (++streak >= 3) break; }
+      if (k < todo.length - 1) await new Promise((r) => setTimeout(r, 400));
+    }
+    keepSaved();
+    if (ok) { if (board) lsSet(LS.board, JSON.stringify(board)); noteBoard(board ? board.id : null); dressQuickSetting(); }
+    if (field) field.rehover();
+    if (!selecting) return;
+    const left = todo.length - ok - failed; // not tried after three failures in a row
+    const notDone = failed + left;
+    selNote = ok || skipped && !notDone
+      ? { icon: I.check, text: (ok ? `Saved ${ok} to ${where}` : "Already saved") + (notDone ? `, ${notDone} didn't save` : "") }
+      : { text: "Couldn't save these" };
+    renderSel();
+    const done = ok > 0 || (skipped && !notDone);
+    selT = setTimeout(() => { if (done) setSelecting(false); else { selNote = null; renderSel(); } }, done ? 2200 : 2600);
+  }
+
+  const ext = globalThis.browser || globalThis.chrome;
+  async function downloadSelected() {
+    const pins = [...selected.values()];
+    if (!pins.length || selNote) return;
+    selNote = { text: "Saving " + pins.length + "…" };
+    renderSel();
+    let res = null;
+    try {
+      // video pins: their cover picture is saved (p.src), not the video
+      const files = (await eachLimit(pins, 4, async (p) => ({ id: p.id, url: await bestUrl(p) }))).filter((f) => f.url);
+      res = await ext.runtime.sendMessage({ type: "pf:download", folder: batchFolder(), files });
+    } catch {}
+    if (!selecting) return; // left select mode (or Pinfield) meanwhile
+    const ok = (res && res.ok) || 0, failed = pins.length - ok;
+    selNote = !ok ? { text: "Couldn't download these" }
+      : { icon: I.check, text: failed ? `Saved ${ok}, ${failed} didn't download` : `Saved ${ok} to Downloads/Pinfield` };
+    renderSel();
+    // saved: a moment to read it, then select mode ends. Nothing saved: back to the selection to try again
+    selT = setTimeout(() => { if (ok) setSelecting(false); else { selNote = null; renderSel(); } }, ok ? 2200 : 2600);
+  }
+
   function hidePin(pin, tile) {
     hidden.add(pin.id);
     lsSet(LS.hidden, JSON.stringify([...hidden].slice(-2000)));
@@ -965,6 +1259,7 @@
       keepSaved();
       if (board) lsSet(LS.board, JSON.stringify(board));
       noteBoard(board ? board.id : null);
+      dressQuickSetting();
       afterSaveChange(pin, "Saved to " + where);
     } catch (err) {
       toast("Couldn't save: " + (err.message || "try again"));
@@ -997,7 +1292,7 @@
     let tag = acts.querySelector(".tag");
     if (!tag) { tag = el("span", "tag glass"); tag.setAttribute("role", "status"); acts.append(tag); }
     tag.textContent = msg;
-    tag.style.top = btn.closest(".grp").offsetTop + btn.offsetTop + 6 + "px";
+    tag.style.top = btn.offsetTop + 6 + "px";
     tag.classList.remove("on");
     void tag.offsetWidth;
     tag.classList.add("on");
@@ -1040,20 +1335,31 @@
     return boardsCache;
   }
 
-  let pickPin = null;
+  let pickDo = null, pickKey = null; // what choosing a board does, and what the picker was opened for
+  let pickAnchor = null, pickExtra = {};
   // when you last saved to each board here (Pinterest's list order isn't "last saved to")
   const LS_BT = "pinfield:boardtimes";
   const boardTimes = () => lsJson(LS_BT, {});
   function noteBoard(id) { const t = boardTimes(); t[id || "profile"] = Date.now(); lsSet(LS_BT, JSON.stringify(t)); }
   const lastSaved = (b, t) => Math.max(t[b.id] || 0, Date.parse(b.last || "") || 0);
-  function openBoardPicker(pin, anchor) {
+  // extra: { last: true } adds a "Last board you saved to" row (for the quick-save setting)
+  function openBoardPicker(anchor, onPick, key, extra = {}) {
     // the same button again closes it
-    if (!ui.menu.hidden && popAnchor === anchor && pickPin === pin) return closePops();
-    pickPin = pin;
+    if (!ui.menu.hidden && popAnchor === anchor && pickKey === key) return closePops();
+    pickDo = onPick;
+    pickKey = key;
+    pickAnchor = anchor;
+    pickExtra = extra;
+    drawPicker();
+  }
+  function drawPicker(prefill = "") {
+    const anchor = pickAnchor, extra = pickExtra;
     const m = ui.menu;
-    m.innerHTML = `<div class="bp"><input type="search" placeholder="Search boards" aria-label="Search boards"><div class="list" role="listbox"><div class="load" style="position:static;height:60px"><i></i><i></i><i></i></div></div></div>`;
+    m.innerHTML = `<div class="bp"><input type="search" placeholder="Search boards" aria-label="Search boards"><div class="list" role="listbox"><div class="load" style="position:static;height:60px"><i></i><i></i><i></i></div></div>` +
+      `<button class="bp-new" data-a="bp-new">${I.create}<span>Create board</span></button></div>`;
     togglePop(m, anchor, true);
     const list = m.querySelector(".list"), input = m.querySelector("input");
+    input.value = prefill;
     const draw = (all) => {
       const q = input.value.trim().toLowerCase();
       const t = boardTimes();
@@ -1063,16 +1369,55 @@
         .filter((x) => !q || x.b.name.toLowerCase().includes(q))
         .sort((x, y) => y.at - x.at || x.i - y.i)
         .map((x) => x.b);
-      list.innerHTML = rows.map((b) => b.profile
+      const last = extra.last && (!q || "last board".includes(q))
+        ? `<button class="bd" data-board="__last" data-name="" role="option"><i>${I.back}</i><span>Last board you saved to</span></button>` : "";
+      list.innerHTML = last + rows.map((b) => b.profile
         ? `<button class="bd" data-board="" data-name="Profile" role="option"><i>${I.native}</i><span>Profile</span></button>`
         : `<button class="bd" data-board="${esc(b.id)}" data-name="${esc(b.name)}" role="option"><i style='background-image:${cssUrl(b.cover)}'></i><span>${esc(b.name)}</span></button>`).join("");
+      // nothing matches what you typed: offer to make it
+      if (q && !rows.length && !last) list.innerHTML = `<button class="bd" data-a="bp-new" role="option"><i>${I.create}</i><span>Create "${esc(input.value.trim())}"</span></button>`;
+      const nb = m.querySelector(".bp-new span");
+      if (nb) nb.textContent = q ? `Create "${input.value.trim()}"` : "Create board";
     };
     loadBoards().then((all) => { input.oninput = () => draw(all); draw(all); placePop(m, anchor); },
       () => { list.innerHTML = `<button class="bd" data-board="" data-name="Profile"><i>${I.native}</i><span>Profile</span></button>`; });
   }
+  // Create board: a name and "keep it secret", like Pinterest's own form. The new board is then picked, so the pin
+  // (or the selection) is saved straight to it.
+  function showCreateBoard() {
+    const m = ui.menu, typed = (m.querySelector(".bp input[type=search]") || {}).value || "";
+    m.innerHTML = `<form class="bp bp-form"><h3>Create board</h3>
+      <label class="bp-lbl" for="pf-bn">Name</label>
+      <input id="pf-bn" type="text" maxlength="50" required placeholder='Like "Places to go" or "Recipes to make"' autocomplete="off">
+      <label class="bp-sw"><input type="checkbox"><span>Keep this board secret</span><small>So only you and collaborators can see it.</small></label>
+      <p class="bp-err" role="alert" hidden></p>
+      <div class="bp-row"><button type="button" class="btn" data-a="bp-back">Back</button><button type="submit" class="btn pri">Create</button></div></form>`;
+    const f = m.querySelector("form"), name = f.querySelector("#pf-bn"), err = f.querySelector(".bp-err"), go = f.querySelector(".pri");
+    name.value = typed.trim().slice(0, 50);
+    placePop(m, pickAnchor);
+    name.focus({ preventScroll: true });
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const n = name.value.trim();
+      if (!n) return name.focus();
+      go.disabled = true; go.textContent = "Creating…"; err.hidden = true;
+      try {
+        const b = await api("createBoard", { name: n, secret: f.querySelector("input[type=checkbox]").checked });
+        const all = await loadBoards().catch(() => []);
+        boardsCache = Promise.resolve([b, ...all.filter((x) => x.id !== b.id)]);
+        pickBoard(b.id, b.name);
+      } catch (ex) {
+        go.disabled = false; go.textContent = "Create";
+        err.textContent = "Couldn't create it: " + ((ex && ex.message) || "try again");
+        err.hidden = false;
+      }
+    });
+  }
   function pickBoard(id, name) {
     closePops();
-    if (pickPin) savePin(pickPin, id ? { id, name } : null);
+    const fn = pickDo;
+    pickDo = pickKey = null;
+    if (fn) fn(id === "__last" ? "last" : id ? { id, name } : null);
   }
 
   // ---------- account page: your profile and boards ----------
@@ -1205,49 +1550,61 @@
   }
 
   // ---------- pin view ----------
-  // An open pin is part of the grid: a big card at the centre, lined up with the bottom bar, its buttons in a
-  // rail beside it, and Pinterest's related pins packed around both like any other cards. The cards around it
-  // stay faded until you move the field. Signed in, this is the pin's own page (related pins from Pinterest);
-  // signed out, Pinterest can't open pin pages, so the feed you're on is laid out around it instead.
-  const RAIL_GAP = 14, RAIL_W = 58;
+  // An open pin is part of the grid: a big card at the centre, lined up with the bottom bar, and Pinterest's
+  // related pins packed around it like any other cards. The card is a Polaroid: the picture with a strip on its
+  // right holding the buttons, the two together exactly three grid columns wide, so no gap opens beside it.
+  // "Details" widens the strip by one column for the title and source. The cards around it stay faded until you
+  // move the field. Signed in, this is the pin's own page (related pins from Pinterest); signed out, Pinterest
+  // can't open pin pages, so the feed you're on is laid out around it instead.
+  const PAD = 8, STRIP = 64, PANEL = 252; // the frame, the button strip, and what details add (one column pitch)
+  const LS_PANEL = "pinfield:details";
+  let panelOpen = lsGet(LS_PANEL, "0") === "1";
   let openHere = null; // signed out: the world to go back to on close
 
+  // three sections of the strip: Save on its own at the top, the rest in the middle, the details toggle at the bottom
   function railButtons(p) {
     const num = /^\d+$/.test(p.id), signed = canSave() && num;
-    const groups = [
-      [["close", I.close, "Close (Esc)"]],
-      signed ? [["save", I.pin, saved.has(p.id) ? "Saved to " + savedMap.get(p.id).board + ". Press to remove" : "Save"], ["board", I.boards, "Save to a board"]] : [],
-      [
+    return {
+      top: signed ? [["save", I.pin, saved.has(p.id) ? "Saved to " + savedMap.get(p.id).board + ". Press to remove" : "Save"]] : [],
+      mid: [
+        ["close", I.close, "Close (Esc)"],
+        signed && ["board", I.boards, "Save to a board"],
         num && ["share", I.share, "Copy link"],
         ["download", I.download, "Download image"],
         p.link && ["visit", I.visit, "Visit site"],
         num && ["native", I.native, "Open on Pinterest (comments and more)"],
       ].filter(Boolean),
-    ].filter((g) => g.length);
-    return groups;
+      bot: [["panel", panelOpen ? I.chevL : I.chevR, panelOpen ? "Hide details" : "Show details"]],
+    };
   }
-  const railHeight = (groups) => groups.reduce((h, g) => h + 10 + g.length * 48 + (g.length - 1) * 4, 0) + 10 * (groups.length - 1);
+  // the narrow strip stacks every button, so the card is never shorter than that stack
+  const stripHeight = (b) => 2 * PAD + 16 + (b.top.length + b.mid.length + b.bot.length) * 50 + 2 * 24;
 
   function heroLayout(p) {
     const ratio = p.w > 0 && p.h > 0 ? p.h / p.w : 1.25;
     const maxH = innerHeight - 96 - 48; // between the top edge and the bottom bar
-    // exactly three columns wide (one on a narrow window), so the grid's gaps around it stay even;
-    // a tall pin is shown whole inside that, over a soft blur of itself
-    const w = innerWidth >= 1000 ? 2 * 252 + 236 : 236;
-    const h = Math.round(Math.max(Math.min(w * ratio, maxH), Math.min(360, w * ratio)));
-    const rh = railHeight(railButtons(p));
-    const card = { x0: -w / 2, x1: w / 2, y0: -h / 2, y1: h / 2 };
-    const ry0 = Math.max(card.y0, -rh / 2);
-    const rail = { x0: w / 2 + RAIL_GAP, x1: w / 2 + RAIL_GAP + RAIL_W, y0: ry0, y1: ry0 + rh };
+    // picture and strip: exactly three columns (one on a narrow window), so the grid's gaps around it stay even;
+    // details add one more column. A tall pin is shown whole inside that, over a soft blur of itself.
+    const cols = innerWidth >= 1000 ? 2 * 252 + 236 : 236;
+    const wide = panelOpen;
+    const w = cols + (wide ? PANEL : 0);
+    const iw = cols - PAD - STRIP;
+    const ih = Math.round(Math.max(Math.min(iw * ratio, maxH - 2 * PAD), Math.min(360, iw * ratio)));
+    const h = Math.max(ih + 2 * PAD, stripHeight(railButtons(p)));
+    const card = { x0: -cols / 2, x1: -cols / 2 + w, y0: -h / 2, y1: h / 2 };
     // the visible middle sits above the bottom bar, so the camera looks a little below the card's centre
-    return { w, h, card, rail, focus: { x: 0, y: 45 } };
+    const fy = 45;
+    // a tall card reaching up beside the top-right buttons (~250px wide) moves left until it clears them,
+    // as far as the left edge allows (on a narrow window the wide card can't clear them all)
+    let shift = 0;
+    if (innerHeight / 2 + card.y0 - fy < 84) shift = Math.min(Math.max(0, w / 2 - innerWidth / 2 + 250), Math.max(0, innerWidth / 2 - w / 2 - 16));
+    return { w, h, iw, wide, card, focus: { x: card.x0 + w / 2 + shift, y: fy } };
   }
 
   function heroWorld(p, pins, open) {
     const w = new World(salt ^ hashStr("pin:" + p.id));
     const L = heroLayout(p);
     w.block(L.card);
-    w.block(L.rail);
     w.focus = L.focus;
     w.hero = { pin: p, L };
     w.open = open;
@@ -1260,12 +1617,13 @@
     const h = el("div", "hero");
     h.style.width = L.w + "px";
     h.style.height = L.h + "px";
-    const card = el("div", "card");
+    const card = el("div", "card" + (L.wide ? " wide" : ""));
     card.setAttribute("aria-label", p.title || "Pin");
     const media = el("div", "media");
+    media.style.width = L.iw + "px";
     if (p.color) media.style.background = p.color;
     const ratio = p.w > 0 && p.h > 0 ? p.h / p.w : 1.25;
-    if (Math.abs(L.h / L.w - ratio) > 0.02) {
+    if (Math.abs((L.h - 2 * PAD) / L.iw - ratio) > 0.02) {
       const bg = el("img", "bg");
       bg.alt = "";
       bg.src = p.src.m;
@@ -1294,15 +1652,29 @@
     zoom.dataset.a = "box-zoom";
     zoom.title = "Enlarge";
     zoom.setAttribute("aria-label", "Enlarge");
-    card.append(media, zoom);
+    media.append(zoom);
     const acts = el("div", "acts");
     acts.dataset.ui = "";
     acts.setAttribute("role", "toolbar");
     acts.setAttribute("aria-label", "Pin actions");
-    acts.style.left = L.w + RAIL_GAP + "px";
-    acts.style.top = L.rail.y0 - L.card.y0 + "px";
-    h.append(card, acts);
+    card.append(media, acts);
+    h.append(card);
     return h;
+  }
+
+  // details on or off: the card changes width, so the grid is laid out around it again
+  function togglePanel() {
+    const old = field && field.world;
+    if (!old || !old.hero) return;
+    panelOpen = !panelOpen;
+    lsSet(LS_PANEL, panelOpen ? "1" : "0");
+    const w = heroWorld(old.hero.pin, old.items, old.open);
+    const r = routes.get(cur);
+    if (r && r.world === old) r.world = w;
+    field.setWorld(w, {});
+    showHero(w);
+    const t = field.hero && field.hero.querySelector('[data-a="box-panel"]');
+    if (t) t.focus({ preventScroll: true });
   }
 
   function showHero(w) {
@@ -1331,17 +1703,29 @@
   function renderBoxActions() {
     const side = field && field.hero && field.hero.querySelector(".acts");
     if (!side || !boxPin) return;
-    side.innerHTML = railButtons(boxPin).map((g) => `<div class="glass grp">` + g.map(([a, icon, title]) =>
-      `<button class="ib${a === "save" ? " save" : ""}" data-a="box-${a}" title="${esc(title)}" aria-label="${esc(title)}" ${a === "save" && saved.has(boxPin.id) ? "data-done" : ""}>${icon}</button>`).join("") + `</div>`).join("");
+    const p = boxPin, b = railButtons(p);
+    const btn = ([a, icon, title]) =>
+      `<button class="ib${a === "save" ? " save" : ""}" data-a="box-${a}" title="${esc(title)}" aria-label="${esc(title)}"${a === "panel" ? ` aria-expanded="${panelOpen}"` : ""} ${a === "save" && saved.has(p.id) ? "data-done" : ""}>${icon}</button>`;
+    let host = "";
+    try { host = p.link ? new URL(p.link).hostname.replace(/^www\./, "") : ""; } catch {}
+    const s = savedMap.get(p.id);
+    // the details: shown only while the strip is wide (CSS), so the narrow strip stays buttons only
+    const info = `<div class="info"><h2>${esc(p.title || "Untitled pin")}</h2>` +
+      (host ? `<button class="src" data-a="box-visit" title="Visit site">${esc(host)}</button>` : "") +
+      (s ? `<small>Saved to ${esc(s.board)}</small>` : "") + `</div>`;
+    side.innerHTML = `<div class="st top">${b.top.map(btn).join("")}</div>` +
+      `<div class="st mid">${info}<div class="st row">${b.mid.map(btn).join("")}</div></div>` +
+      `<div class="st bot">${b.bot.map(btn).join("")}</div>`;
   }
 
   function boxAction(a, btn) {
     const p = boxPin;
     if (!p) return;
     if (a === "close") closeBox();
-    else if (a === "save") saved.has(p.id) ? unsavePin(p) : savePin(p, lastBoard());
+    else if (a === "save") saved.has(p.id) ? unsavePin(p) : savePin(p, quickBoard());
     else if (a === "zoom") openLightbox(p);
-    else if (a === "board") openBoardPicker(p, btn);
+    else if (a === "panel") togglePanel();
+    else if (a === "board") openBoardPicker(btn, (b) => savePin(p, b), p);
     else if (a === "share") copyLink(p);
     else if (a === "download") download(p);
     else if (a === "visit") window.open(p.link, "_blank", "noopener,noreferrer");
@@ -1524,7 +1908,7 @@
     if (!pill) {
       pill = document.createElement("pinfield-toggle");
       const sh = pill.attachShadow({ mode: "open" });
-      sh.innerHTML = `<style>button{position:fixed;left:50%;translate:-50% 0;bottom:18px;z-index:2147483647;height:48px;padding:0 20px;border:0;border-radius:999px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8);color:#111;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .5px rgba(255,255,255,.4),0 0 0 .5px rgba(0,0,0,.07),0 8px 28px rgba(0,0,0,.16);cursor:pointer;display:flex;align-items:center;gap:8px;transition:scale .25s cubic-bezier(.2,.8,.2,1)}button:hover{background:rgba(255,255,255,.75)}button:active{scale:1.08}button:focus-visible{outline:3px solid #0074e8;outline-offset:2px}svg{width:18px;height:18px;fill:currentColor}</style><button title="Alt+Shift+F">${I.boards}Field view</button>`;
+      sh.innerHTML = `<style>button{position:fixed;left:50%;translate:-50% 0;bottom:18px;z-index:2147483647;height:48px;padding:0 20px;border:0;border-radius:999px;background:#fff;color:#111;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 28px rgba(0,0,0,.16);cursor:pointer;display:flex;align-items:center;gap:8px;transition:scale .25s cubic-bezier(.2,.8,.2,1)}button:hover{background:#ececec}button:active{scale:1.08}button:focus-visible{outline:3px solid #0074e8;outline-offset:2px}svg{width:18px;height:18px;fill:currentColor}</style><button title="Alt+Shift+F">${I.boards}Field view</button>`;
       sh.querySelector("button").addEventListener("click", () => setOn(true));
       document.documentElement.appendChild(pill);
     }
@@ -1537,6 +1921,7 @@
     if (ui.sugg && !ui.sugg.hidden) closeSugg();
     else if (popAnchor) closePops();
     else if (closeLightbox()) {}
+    else if (selecting) { if (!selNote) setSelecting(false); } // not while it's saving
     else if (boxPin) closeBox();
     else if (ui.boards && !ui.boards.hidden) toggleBoards(false);
   }, true);
