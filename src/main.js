@@ -387,6 +387,25 @@
   .bp input{height:44px;border:0;border-radius:22px;background:var(--press);color:var(--fg);font:inherit;font-size:15px;padding:0 16px;margin:2px 0 10px;outline:none;flex:none;transition:background .2s,box-shadow .2s}
   .bp input:focus{background:var(--lens);box-shadow:0 0 0 2px rgba(0,116,232,.5)}
   .bp h3{margin:4px 8px 6px;font-size:12px;font-weight:600;color:var(--muted)}
+  .bp-new{display:flex;align-items:center;gap:12px;flex:none;margin-top:6px;padding:10px 12px;border:0;border-top:1px solid var(--line);border-radius:0 0 12px 12px;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer;text-align:left}
+  .bp-new:hover{background:var(--press)}
+  .bp-new svg{width:20px;height:20px;padding:12px;box-sizing:content-box;border-radius:10px;background:var(--btn)}
+  .bp-new span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .bp-new:focus-visible{outline:3px solid #0074e8;outline-offset:-3px}
+  .bp-form{gap:6px;padding:10px 12px 12px}
+  .bp-form h3{margin:2px 0 8px;font-size:16px;color:var(--fg)}
+  .bp-lbl{font-size:12px;font-weight:600;color:var(--muted)}
+  .bp-form input[type=text]{height:44px;border:0;border-radius:14px;background:var(--press);color:var(--fg);font:inherit;font-size:15px;padding:0 14px;margin:0 0 6px;outline:none}
+  .bp-form input[type=text]:focus{background:var(--lens);box-shadow:0 0 0 2px rgba(0,116,232,.5)}
+  .bp-sw{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;font-size:15px;font-weight:600;cursor:pointer;padding:6px 0}
+  .bp-sw input{width:20px;height:20px;margin:0;accent-color:#e60023}
+  .bp-sw small{grid-column:2;font-size:12px;font-weight:400;color:var(--muted)}
+  .bp-err{margin:0;color:#e60023;font-size:13px}
+  .bp-err[hidden]{display:none}
+  .bp-row{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+  .btn.pri{background:#e60023;color:#fff}
+  .btn.pri:hover{background:#c8001f}
+  .btn[disabled]{opacity:.6;cursor:default}
   .bp .list{overflow:auto;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
   .bd{display:flex;align-items:center;gap:12px;border:0;background:transparent;color:var(--fg);font:inherit;font-weight:600;font-size:15px;padding:6px;border-radius:10px;cursor:pointer;text-align:left}
   .bd{transition:background .15s,scale .15s}
@@ -792,6 +811,8 @@
     else if (act === "create") { setOn(false); location.assign("/pin-creation-tool/"); }
     else if (act === "native") setOn(false);
     else if (act === "tune") togglePop(ui.tune, a);
+    else if (act === "bp-new") showCreateBoard();
+    else if (act === "bp-back") drawPicker();
     else if (act === "quick-board") openBoardPicker(ui.corner.querySelector('[data-a="tune"]'), setQuick, "quick", { last: true });
     else if (act === "sel-save") openBoardPicker(a, saveSelected, "sel");
     else if (act === "sel-on") setSelecting(true);
@@ -1315,6 +1336,7 @@
   }
 
   let pickDo = null, pickKey = null; // what choosing a board does, and what the picker was opened for
+  let pickAnchor = null, pickExtra = {};
   // when you last saved to each board here (Pinterest's list order isn't "last saved to")
   const LS_BT = "pinfield:boardtimes";
   const boardTimes = () => lsJson(LS_BT, {});
@@ -1326,10 +1348,18 @@
     if (!ui.menu.hidden && popAnchor === anchor && pickKey === key) return closePops();
     pickDo = onPick;
     pickKey = key;
+    pickAnchor = anchor;
+    pickExtra = extra;
+    drawPicker();
+  }
+  function drawPicker(prefill = "") {
+    const anchor = pickAnchor, extra = pickExtra;
     const m = ui.menu;
-    m.innerHTML = `<div class="bp"><input type="search" placeholder="Search boards" aria-label="Search boards"><div class="list" role="listbox"><div class="load" style="position:static;height:60px"><i></i><i></i><i></i></div></div></div>`;
+    m.innerHTML = `<div class="bp"><input type="search" placeholder="Search boards" aria-label="Search boards"><div class="list" role="listbox"><div class="load" style="position:static;height:60px"><i></i><i></i><i></i></div></div>` +
+      `<button class="bp-new" data-a="bp-new">${I.create}<span>Create board</span></button></div>`;
     togglePop(m, anchor, true);
     const list = m.querySelector(".list"), input = m.querySelector("input");
+    input.value = prefill;
     const draw = (all) => {
       const q = input.value.trim().toLowerCase();
       const t = boardTimes();
@@ -1344,9 +1374,44 @@
       list.innerHTML = last + rows.map((b) => b.profile
         ? `<button class="bd" data-board="" data-name="Profile" role="option"><i>${I.native}</i><span>Profile</span></button>`
         : `<button class="bd" data-board="${esc(b.id)}" data-name="${esc(b.name)}" role="option"><i style='background-image:${cssUrl(b.cover)}'></i><span>${esc(b.name)}</span></button>`).join("");
+      // nothing matches what you typed: offer to make it
+      if (q && !rows.length && !last) list.innerHTML = `<button class="bd" data-a="bp-new" role="option"><i>${I.create}</i><span>Create "${esc(input.value.trim())}"</span></button>`;
+      const nb = m.querySelector(".bp-new span");
+      if (nb) nb.textContent = q ? `Create "${input.value.trim()}"` : "Create board";
     };
     loadBoards().then((all) => { input.oninput = () => draw(all); draw(all); placePop(m, anchor); },
       () => { list.innerHTML = `<button class="bd" data-board="" data-name="Profile"><i>${I.native}</i><span>Profile</span></button>`; });
+  }
+  // Create board: a name and "keep it secret", like Pinterest's own form. The new board is then picked, so the pin
+  // (or the selection) is saved straight to it.
+  function showCreateBoard() {
+    const m = ui.menu, typed = (m.querySelector(".bp input[type=search]") || {}).value || "";
+    m.innerHTML = `<form class="bp bp-form"><h3>Create board</h3>
+      <label class="bp-lbl" for="pf-bn">Name</label>
+      <input id="pf-bn" type="text" maxlength="50" required placeholder='Like "Places to go" or "Recipes to make"' autocomplete="off">
+      <label class="bp-sw"><input type="checkbox"><span>Keep this board secret</span><small>So only you and collaborators can see it.</small></label>
+      <p class="bp-err" role="alert" hidden></p>
+      <div class="bp-row"><button type="button" class="btn" data-a="bp-back">Back</button><button type="submit" class="btn pri">Create</button></div></form>`;
+    const f = m.querySelector("form"), name = f.querySelector("#pf-bn"), err = f.querySelector(".bp-err"), go = f.querySelector(".pri");
+    name.value = typed.trim().slice(0, 50);
+    placePop(m, pickAnchor);
+    name.focus({ preventScroll: true });
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const n = name.value.trim();
+      if (!n) return name.focus();
+      go.disabled = true; go.textContent = "Creating…"; err.hidden = true;
+      try {
+        const b = await api("createBoard", { name: n, secret: f.querySelector("input[type=checkbox]").checked });
+        const all = await loadBoards().catch(() => []);
+        boardsCache = Promise.resolve([b, ...all.filter((x) => x.id !== b.id)]);
+        pickBoard(b.id, b.name);
+      } catch (ex) {
+        go.disabled = false; go.textContent = "Create";
+        err.textContent = "Couldn't create it: " + ((ex && ex.message) || "try again");
+        err.hidden = false;
+      }
+    });
   }
   function pickBoard(id, name) {
     closePops();

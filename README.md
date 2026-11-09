@@ -21,7 +21,8 @@ Shipping it: see RELEASE.md. Store listing text and images: `store/`.
 ## Use it
 
 - Drag, flick, scroll or use the arrow keys to move. Ctrl + scroll, pinch or +/- to zoom (0 resets).
-- Hover a pin: Save (to your last board, press again to remove), board picker, visit site, copy link, and
+- Hover a pin: Save (to your quick-save board, press again to remove), board picker (with Create board),
+  visit site, copy link, and
   ⋯ for More like this, Download and Hide.
 - Select (the dashed tick, top right): click pins to pick them (a drag still pans), then Download saves them all at full
   size into `Downloads/Pinfield/<board or search> <date time>/`, numbered in the order you picked them.
