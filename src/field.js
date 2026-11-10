@@ -30,7 +30,8 @@
   const LITE_Z = 0.62; // below this zoom, no hover chrome
   const VARIANTS = ["s", "m", "l"];
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const clamp = (v, m) => (v > m ? m : v < -m ? -m : v);
+  // caps a move's length, keeping its direction (capping x and y apart bent diagonal flings onto the axes)
+  const cap = (x, y, m) => { const l = Math.hypot(x, y); return l > m ? [x * m / l, y * m / l] : [x, y]; };
   const now = () => performance.now();
   const idle = (fn, timeout) =>
     window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout }) : setTimeout(fn, 60);
@@ -221,10 +222,12 @@
         const dx = this.goal.x - c.x, dy = this.goal.y - c.y;
         if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
           const a = 1 - Math.pow(1 - 0.16, k);
-          c.x += clamp(dx * a, vmax); c.y += clamp(dy * a, vmax); busy = true;
+          const [mx, my] = cap(dx * a, dy * a, vmax);
+          c.x += mx; c.y += my; busy = true;
         }
         if (Math.abs(this.vel.x) > 0.03 || Math.abs(this.vel.y) > 0.03) {
-          c.x += clamp(this.vel.x * k, vmax); c.y += clamp(this.vel.y * k, vmax);
+          const [mx, my] = cap(this.vel.x * k, this.vel.y * k, vmax);
+          c.x += mx; c.y += my;
           this.goal.x = c.x; this.goal.y = c.y;
           const f = Math.pow(DECAY, k);
           this.vel.x *= f; this.vel.y *= f; busy = true;
@@ -820,8 +823,9 @@
       this.vel.x = this.vel.y = 0;
       this.glide = null;
       const lim = (this.size.h * 1.2) / this.cam.z;
-      this.goal.x = this.cam.x + clamp(this.goal.x - this.cam.x + (e.deltaX * unit) / this.cam.z, lim);
-      this.goal.y = this.cam.y + clamp(this.goal.y - this.cam.y + (e.deltaY * unit) / this.cam.z, lim);
+      const [gx, gy] = cap(this.goal.x - this.cam.x + (e.deltaX * unit) / this.cam.z, this.goal.y - this.cam.y + (e.deltaY * unit) / this.cam.z, lim);
+      this.goal.x = this.cam.x + gx;
+      this.goal.y = this.cam.y + gy;
       this.kick();
     }
 
